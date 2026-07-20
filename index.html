@@ -185,6 +185,9 @@
     opacity:0; transform:translateX(16px);
   }
   .task.sel{ background:var(--hover); border-radius:10px; margin:0 -10px; padding-left:10px; padding-right:10px; }
+  .task{ touch-action:pan-y; }
+  .task.sw-right{ background:rgba(52,199,89,.18); border-radius:10px; }
+  .task.sw-left{ background:rgba(255,204,0,.22); border-radius:10px; }
   .chip-when{ color:var(--accent); font-weight:600; }
   .chip-dl{ display:inline-flex; align-items:center; gap:3px; color:var(--red); font-weight:600; }
   .chip-ck{ color:var(--sub); }
@@ -1410,6 +1413,61 @@
         save(); renderAll();
       }
     }
+  });
+
+  /* ================= swipe gestures ================= */
+  var swipe = { el:null, id:null, x:0, y:0, dx:0, active:false };
+  function swipeReset(el){
+    el.classList.remove("sw-right","sw-left");
+    el.style.transition = "transform .18s ease";
+    el.style.transform = "";
+  }
+  page.addEventListener("touchstart", function(e){
+    var row = e.target.closest(".task[data-tid]");
+    if (!row || row.classList.contains("open")) return;
+    swipe.el = row;
+    swipe.id = row.getAttribute("data-tid");
+    swipe.x = e.touches[0].clientX;
+    swipe.y = e.touches[0].clientY;
+    swipe.dx = 0;
+    swipe.active = false;
+  }, { passive:true });
+  page.addEventListener("touchmove", function(e){
+    if (!swipe.el) return;
+    var dx = e.touches[0].clientX - swipe.x;
+    var dy = e.touches[0].clientY - swipe.y;
+    if (!swipe.active){
+      if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+      swipe.active = true;
+    }
+    swipe.dx = dx;
+    var lim = Math.max(-120, Math.min(120, dx));
+    swipe.el.style.transition = "none";
+    swipe.el.style.transform = "translateX(" + lim + "px)";
+    swipe.el.classList.toggle("sw-right", dx > 80);
+    swipe.el.classList.toggle("sw-left", dx < -80);
+  }, { passive:true });
+  page.addEventListener("touchend", function(){
+    if (!swipe.el) return;
+    var el = swipe.el, id = swipe.id, dx = swipe.dx, wasActive = swipe.active;
+    swipe.el = null;
+    swipeReset(el);
+    if (!wasActive) return;
+    var f = findTask(id);
+    if (!f || f.task.done) return;
+    if (dx > 80){
+      var cb = el.querySelector(".cb");
+      if (cb && !cb.checked) cb.click();
+    } else if (dx < -80){
+      f.task.today = !f.task.today;
+      if (f.task.today) f.task.when = "";
+      save(); renderAll();
+    }
+  });
+  page.addEventListener("touchcancel", function(){
+    if (!swipe.el) return;
+    swipeReset(swipe.el);
+    swipe.el = null;
   });
 
   /* ================= quick entry sheet ================= */

@@ -151,6 +151,18 @@
   .task{
     display:flex; align-items:flex-start; gap:12px; padding:11px 0;
     border-bottom:1px solid var(--line-soft); min-height:44px;
+    background:var(--bg);
+  }
+  .task[draggable="true"]{ cursor:grab; }
+  .task.dragging{ opacity:.35; }
+  .task.drag-touch{
+    position:fixed; z-index:60; left:0; margin:0; box-sizing:border-box;
+    box-shadow:0 14px 34px rgba(0,0,0,.28); border-radius:10px; pointer-events:none;
+    background:var(--sheet-bg);
+  }
+  .task-ph{
+    border-bottom:1px solid var(--line-soft); border-radius:10px;
+    background:var(--hover); box-sizing:border-box;
   }
   .cb{
     appearance:none; width:19px; height:19px; border:1.6px solid var(--sub);
@@ -531,6 +543,13 @@
     s.deadlines.forEach(function(d){
       if (!d.date && d.when === "11 AUG") d.date = "2026-08-11";
     });
+    if (typeof s.orderSeq === "undefined"){
+      var seq = 0;
+      var give = function(t){ if (typeof t.order === "undefined") t.order = (seq += 10); else seq = Math.max(seq, t.order); };
+      s.inbox.forEach(give);
+      s.missions.forEach(function(m){ m.tasks.forEach(give); });
+      s.orderSeq = seq;
+    }
     return s;
   }
 
@@ -564,12 +583,16 @@
     return state.missions.find(function(m){ return m.id === id; }) || null;
   }
   function openOf(list){ return list.filter(function(t){ return !t.done; }); }
+  function byOrder(a, b){ return (a.order||0) - (b.order||0); }
+  function orderedOpen(list){ return openOf(list).sort(byOrder); }
+  function nextOrder(){ state.orderSeq = (state.orderSeq||0) + 10; return state.orderSeq; }
   function todayTasks(){
     var out = [];
     openOf(state.inbox).forEach(function(t){ if (t.today) out.push({ t:t, sub:"Inbox" }); });
     state.missions.forEach(function(m){
       openOf(m.tasks).forEach(function(t){ if (t.today) out.push({ t:t, sub:m.name }); });
     });
+    out.sort(function(a,b){ return byOrder(a.t, b.t); });
     return out;
   }
   function liveOpenCount(){
@@ -763,7 +786,8 @@
       chips += '<span class="chip-ck">'+ckDone+'/'+t.checklist.length+'</span>';
     }
     var subline = chips + (sub ? '<span>'+esc(sub)+'</span>' : "") + moveSel;
-    return '<div class="task'+(t.done ? " done":"")+(t.id===selId?" sel":"")+'" data-tid="'+t.id+'">' +
+    var canDrag = !t.done && !opts.noDrag;
+    return '<div class="task'+(t.done ? " done":"")+(t.id===selId?" sel":"")+'" data-tid="'+t.id+'"'+(canDrag?' draggable="true"':'')+'>' +
       '<input type="checkbox" class="cb" data-id="'+t.id+'"'+(t.done?" checked":"")+'>' +
       '<div class="t-main" data-act="expand" data-id="'+t.id+'"><div class="t-title">'+esc(t.text)+'</div>' +
         (t.note ? '<div class="t-note">'+esc(t.note)+'</div>' : "") +
@@ -830,7 +854,7 @@
 
   function renderInbox(){
     var html = viewHeader("inbox","Inbox");
-    var open = openOf(state.inbox);
+    var open = orderedOpen(state.inbox);
     if (open.length){
       open.forEach(function(t){ html += taskRow(t, "", { move:true }); });
     } else {
@@ -867,7 +891,7 @@
       groups[iso].due.forEach(function(w){
         html += '<div class="ev"><span class="tm red">DUE</span><span class="tx">'+esc(w)+'</span></div>';
       });
-      groups[iso].tasks.forEach(function(x){ html += taskRow(x.t, x.sub); });
+      groups[iso].tasks.forEach(function(x){ html += taskRow(x.t, x.sub, { noDrag:true }); });
       html += '</div></div>';
     });
     page.innerHTML = html;
@@ -877,7 +901,7 @@
     var html = viewHeader("layers","Anytime");
     var any = false;
     activeMissions().forEach(function(m){
-      var open = openOf(m.tasks).filter(function(t){ return !t.when; });
+      var open = orderedOpen(m.tasks).filter(function(t){ return !t.when; });
       if (!open.length) return;
       any = true;
       html += '<div class="sec" data-act="nav-project-sec" data-id="'+m.id+'" style="cursor:pointer">' +
@@ -944,7 +968,7 @@
       '<h1 style="font-size:26px">'+esc(m.name)+'</h1><span class="spacer"></span>' +
       '<button class="chip '+m.status+'" data-act="cycleStatus" data-id="'+m.id+'">'+m.status+'</button></div>';
     if (m.note) html += '<div class="vnote">'+esc(m.note)+'</div>';
-    var open = openOf(m.tasks);
+    var open = orderedOpen(m.tasks);
     if (open.length){
       open.forEach(function(t){ html += taskRow(t, ""); });
     } else {
@@ -971,7 +995,7 @@
     });
     if (!q) html += '<div class="empty">Type to search open tasks.</div>';
     else if (!hits.length) html += '<div class="empty">No matches for &ldquo;'+esc(searchQ)+'&rdquo;.</div>';
-    hits.forEach(function(x){ html += taskRow(x.t, x.sub); });
+    hits.forEach(function(x){ html += taskRow(x.t, x.sub, { noDrag:true }); });
     page.innerHTML = html;
   }
 
@@ -1173,7 +1197,7 @@
     renderAll();
   }
   function addTask(dest, text){
-    var t = { id: uid(), text: text, note:"", done:false, doneAt:"", today: route.view === "today", when:"", deadline:"", checklist:[] };
+    var t = { id: uid(), text: text, note:"", done:false, doneAt:"", today: route.view === "today", when:"", deadline:"", checklist:[], order: nextOrder() };
     if (dest === "inbox"){ state.inbox.push(t); }
     else {
       var m = findMission(dest);
@@ -1415,44 +1439,144 @@
     }
   });
 
-  /* ================= swipe gestures ================= */
-  var swipe = { el:null, id:null, x:0, y:0, dx:0, active:false };
+  /* ================= reordering ================= */
+  /* task rows for one reorderable list are rendered as a contiguous run of
+     direct children of #page (a .sec/.addrow/etc heading breaks the run),
+     so grouping just walks siblings until it hits a non-task element. */
+  function dragGroup(el){
+    if (el.parentElement !== page) return [el];
+    var kids = Array.prototype.slice.call(page.children);
+    var i = kids.indexOf(el);
+    if (i === -1) return [el];
+    var isRow = function(k){ return k && k.matches && k.matches('.task[data-tid]:not(.done)'); };
+    var start = i, end = i;
+    while (start > 0 && isRow(kids[start-1])) start--;
+    while (end < kids.length-1 && isRow(kids[end+1])) end++;
+    return kids.slice(start, end+1);
+  }
+  function commitOrderFromDOM(representativeEl){
+    var groupEls = dragGroup(representativeEl);
+    var ids = Array.prototype.map.call(groupEls, function(el){ return el.getAttribute("data-tid"); });
+    var tasks = ids.map(findTask).filter(Boolean).map(function(f){ return f.task; });
+    if (tasks.length < 2) return;
+    var base = Math.min.apply(null, tasks.map(function(t){ return t.order||0; }));
+    tasks.forEach(function(t, i){ t.order = base + i * 10; });
+    save(); renderAll();
+  }
+
+  /* ---- desktop: native HTML5 drag and drop ---- */
+  var dragEls = null;
+  page.addEventListener("dragstart", function(e){
+    var row = e.target.closest(".task[draggable='true']");
+    if (!row){ e.preventDefault(); return; }
+    dragEls = dragGroup(row);
+    row.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", row.getAttribute("data-tid")); } catch(err){}
+  });
+  page.addEventListener("dragover", function(e){
+    var dragging = page.querySelector(".task.dragging");
+    if (!dragging || !dragEls) return;
+    var over = e.target.closest(".task[data-tid]");
+    if (!over || over === dragging || dragEls.indexOf(over) === -1) return;
+    e.preventDefault();
+    var rect = over.getBoundingClientRect();
+    var before = (e.clientY - rect.top) < rect.height / 2;
+    over.parentNode.insertBefore(dragging, before ? over : over.nextSibling);
+  });
+  page.addEventListener("drop", function(e){ e.preventDefault(); });
+  page.addEventListener("dragend", function(){
+    var dragging = page.querySelector(".task.dragging");
+    if (dragging){ dragging.classList.remove("dragging"); if (dragEls) commitOrderFromDOM(dragging); }
+    dragEls = null;
+  });
+
+  /* ---- touch: swipe (complete / today) + long-press drag (reorder) ---- */
+  var g = { el:null, id:null, x:0, y:0, dx:0, dy:0, mode:null, timer:null, group:null, ph:null };
   function swipeReset(el){
     el.classList.remove("sw-right","sw-left");
     el.style.transition = "transform .18s ease";
     el.style.transform = "";
   }
+  function beginTouchDrag(){
+    if (!g.el || g.mode) return;
+    g.mode = "drag";
+    g.group = dragGroup(g.el);
+    var rect = g.el.getBoundingClientRect();
+    g.ph = document.createElement("div");
+    g.ph.className = "task-ph";
+    g.ph.style.height = rect.height + "px";
+    g.el.parentNode.insertBefore(g.ph, g.el);
+    g.startTop = rect.top; g.width = rect.width; g.height = rect.height;
+    g.el.classList.add("drag-touch");
+    g.el.style.width = rect.width + "px";
+    g.el.style.left = rect.left + "px";
+    g.el.style.top = rect.top + "px";
+    if (navigator.vibrate) navigator.vibrate(8);
+  }
+  function moveTouchDrag(clientY){
+    if (!g.el) return;
+    g.el.style.top = (g.startTop + (clientY - g.y)) + "px";
+    var siblings = g.group.filter(function(el){ return el !== g.el; });
+    var target = null;
+    for (var i = 0; i < siblings.length; i++){
+      var r = siblings[i].getBoundingClientRect();
+      if (clientY < r.top + r.height/2){ target = siblings[i]; break; }
+    }
+    var parent = g.ph.parentNode;
+    if (target) parent.insertBefore(g.ph, target);
+    else parent.insertBefore(g.ph, siblings.length ? siblings[siblings.length-1].nextSibling : null);
+  }
+  function endTouchDrag(){
+    if (!g.el) return;
+    g.ph.parentNode.insertBefore(g.el, g.ph);
+    g.ph.parentNode.removeChild(g.ph);
+    g.el.classList.remove("drag-touch");
+    g.el.style.top = ""; g.el.style.left = ""; g.el.style.width = "";
+    commitOrderFromDOM(g.el);
+  }
   page.addEventListener("touchstart", function(e){
     var row = e.target.closest(".task[data-tid]");
     if (!row || row.classList.contains("open")) return;
-    swipe.el = row;
-    swipe.id = row.getAttribute("data-tid");
-    swipe.x = e.touches[0].clientX;
-    swipe.y = e.touches[0].clientY;
-    swipe.dx = 0;
-    swipe.active = false;
+    g.el = row; g.id = row.getAttribute("data-tid");
+    g.x = e.touches[0].clientX; g.y = e.touches[0].clientY;
+    g.dx = 0; g.dy = 0; g.mode = null;
+    clearTimeout(g.timer);
+    if (row.getAttribute("draggable") === "true"){
+      g.timer = setTimeout(beginTouchDrag, 450);
+    }
   }, { passive:true });
   page.addEventListener("touchmove", function(e){
-    if (!swipe.el) return;
-    var dx = e.touches[0].clientX - swipe.x;
-    var dy = e.touches[0].clientY - swipe.y;
-    if (!swipe.active){
-      if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
-      swipe.active = true;
+    if (!g.el) return;
+    var dx = e.touches[0].clientX - g.x;
+    var dy = e.touches[0].clientY - g.y;
+    if (g.mode === "drag"){
+      e.preventDefault();
+      moveTouchDrag(e.touches[0].clientY);
+      return;
     }
-    swipe.dx = dx;
-    var lim = Math.max(-120, Math.min(120, dx));
-    swipe.el.style.transition = "none";
-    swipe.el.style.transform = "translateX(" + lim + "px)";
-    swipe.el.classList.toggle("sw-right", dx > 80);
-    swipe.el.classList.toggle("sw-left", dx < -80);
-  }, { passive:true });
+    if (g.mode === null){
+      if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+      clearTimeout(g.timer);
+      if (Math.abs(dx) > Math.abs(dy) * 1.4) g.mode = "swipe"; else { g.mode = "scroll"; return; }
+    }
+    if (g.mode === "swipe"){
+      g.dx = dx;
+      var lim = Math.max(-120, Math.min(120, dx));
+      g.el.style.transition = "none";
+      g.el.style.transform = "translateX(" + lim + "px)";
+      g.el.classList.toggle("sw-right", dx > 80);
+      g.el.classList.toggle("sw-left", dx < -80);
+    }
+  }, { passive:false });
   page.addEventListener("touchend", function(){
-    if (!swipe.el) return;
-    var el = swipe.el, id = swipe.id, dx = swipe.dx, wasActive = swipe.active;
-    swipe.el = null;
+    clearTimeout(g.timer);
+    if (!g.el) return;
+    var el = g.el, id = g.id, dx = g.dx, mode = g.mode;
+    if (mode === "drag"){ endTouchDrag(); g.el = null; return; }
+    g.el = null;
+    if (mode !== "swipe") return;
     swipeReset(el);
-    if (!wasActive) return;
     var f = findTask(id);
     if (!f || f.task.done) return;
     if (dx > 80){
@@ -1465,9 +1589,11 @@
     }
   });
   page.addEventListener("touchcancel", function(){
-    if (!swipe.el) return;
-    swipeReset(swipe.el);
-    swipe.el = null;
+    clearTimeout(g.timer);
+    if (!g.el) return;
+    if (g.mode === "drag"){ endTouchDrag(); }
+    else if (g.mode === "swipe"){ swipeReset(g.el); }
+    g.el = null;
   });
 
   /* ================= quick entry sheet ================= */
@@ -1498,7 +1624,7 @@
   document.getElementById("qeSave").addEventListener("click", function(){
     var v = qeTitle.value.trim();
     if (!v){ qeTitle.focus(); return; }
-    var t = { id: uid(), text:v, note:qeNotes.value.trim(), done:false, doneAt:"", today: qeToday.checked, when:"", deadline:"", checklist:[] };
+    var t = { id: uid(), text:v, note:qeNotes.value.trim(), done:false, doneAt:"", today: qeToday.checked, when:"", deadline:"", checklist:[], order: nextOrder() };
     var wIso = parseNL(document.getElementById("qeWhen").value);
     if (wIso === todayISO()){ t.today = true; }
     else if (wIso){ t.when = wIso; t.today = false; }

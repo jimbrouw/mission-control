@@ -177,6 +177,59 @@
     border:none; background:transparent; color:var(--sub); font-size:13px; padding:0;
     max-width:150px; outline:none; cursor:pointer;
   }
+  .t-main{ cursor:pointer; }
+  .cb:checked{ animation:cbpop .28s cubic-bezier(.2,1.6,.4,1); }
+  @keyframes cbpop{ 45%{ transform:scale(1.28); } }
+  .task.finishing{
+    transition:opacity .3s ease .6s, transform .3s ease .6s;
+    opacity:0; transform:translateX(16px);
+  }
+  .task.sel{ background:var(--hover); border-radius:10px; margin:0 -10px; padding-left:10px; padding-right:10px; }
+  .chip-when{ color:var(--accent); font-weight:600; }
+  .chip-dl{ display:inline-flex; align-items:center; gap:3px; color:var(--red); font-weight:600; }
+  .chip-ck{ color:var(--sub); }
+
+  /* expanded task card (Things-style) */
+  .task.open{
+    display:block; background:var(--sheet-bg); border:1px solid var(--line);
+    border-radius:14px; box-shadow:0 10px 34px rgba(0,0,0,.14);
+    padding:14px 16px; margin:8px -12px; cursor:default;
+  }
+  .task.open .headrow{ display:flex; gap:12px; align-items:center; }
+  .ed-title{
+    flex:1; border:none; outline:none; background:transparent; font-size:16px; font-weight:600;
+    padding:0; min-width:0;
+  }
+  .ed-notes{
+    width:calc(100% - 31px); border:none; outline:none; background:transparent; resize:none;
+    color:var(--sub); font-size:14px; margin:8px 0 2px 31px; padding:0; display:block; line-height:1.4;
+  }
+  .ck{ display:flex; align-items:center; gap:9px; margin-left:31px; padding:4px 0; font-size:14px; }
+  .ck span{ flex:1; min-width:0; }
+  .ck.done span{ color:var(--sub); text-decoration:line-through; }
+  .ckb{
+    appearance:none; width:15px; height:15px; border:1.4px solid var(--sub); border-radius:50%;
+    cursor:pointer; display:grid; place-content:center; flex:none;
+  }
+  .ckb:checked{ background:var(--accent); border-color:var(--accent); }
+  .ckb:checked::after{
+    content:""; width:7px; height:4px; border-left:1.6px solid #fff; border-bottom:1.6px solid #fff;
+    transform:rotate(-45deg) translateY(-1px);
+  }
+  .ck .rm{ border:none; background:none; color:var(--sub); cursor:pointer; opacity:.4; padding:2px; flex:none; }
+  .ck .rm:hover{ opacity:1; }
+  .ck-add{
+    margin-left:31px; border:none; outline:none; background:transparent; font-size:14px;
+    padding:4px 0; width:calc(100% - 31px); color:var(--ink);
+  }
+  .ck-add::placeholder{ color:var(--sub); }
+  .ed-row{ display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 2px 31px; align-items:center; }
+  .pill{
+    display:flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:999px;
+    padding:4px 11px; font-size:13px; color:var(--sub);
+  }
+  .pill input{ border:none; outline:none; background:transparent; width:100px; font-size:13px; color:var(--ink); }
+  .pill input::placeholder{ color:var(--sub); opacity:.7; }
 
   .addrow{ display:flex; align-items:center; gap:12px; padding:12px 0; }
   .addrow .plus{ color:var(--accent); flex:none; display:grid; place-content:center; width:19px; }
@@ -344,6 +397,7 @@
     <div class="qeRow">
       <select id="qeDest"></select>
       <label class="qeToday"><input type="checkbox" id="qeToday" /> Today</label>
+      <input type="text" id="qeWhen" placeholder="When &middot; fri &middot; 11 aug" autocomplete="off" style="border:1px solid var(--line); background:var(--bg); border-radius:8px; padding:6px 8px; font-size:14px; outline:none; width:150px;" />
     </div>
     <div class="qeActions">
       <button class="btn-ghost" id="qeCancel">Cancel</button>
@@ -456,13 +510,17 @@
     if (!s.inbox) s.inbox = [];
     if (!s.missions) s.missions = [];
     if (!s.deadlines) s.deadlines = [];
+    function migrateTask(t){
+      if (typeof t.today === "undefined") t.today = false;
+      if (typeof t.when === "undefined") t.when = "";
+      if (typeof t.deadline === "undefined") t.deadline = "";
+      if (!t.checklist) t.checklist = [];
+    }
     s.missions.forEach(function(m){
       if (!m.tasks) m.tasks = [];
-      m.tasks.forEach(function(t){
-        if (typeof t.today === "undefined") t.today = false;
-      });
+      m.tasks.forEach(migrateTask);
     });
-    s.inbox.forEach(function(t){ if (typeof t.today === "undefined") t.today = false; });
+    s.inbox.forEach(migrateTask);
     if (!s.settings) s.settings = { dailyGoal: 3 };
     if (typeof s.streak.best === "undefined") s.streak.best = s.streak.count || 0;
     if (typeof s.streak.freezes === "undefined") s.streak.freezes = 1;
@@ -526,6 +584,65 @@
   }
   function activeMissions(){ return state.missions.filter(function(m){ return m.status !== "PARKED"; }); }
   function parkedMissions(){ return state.missions.filter(function(m){ return m.status === "PARKED"; }); }
+
+  /* attribute-safe escape */
+  function escA(s){ return esc(s).replace(/"/g, "&quot;"); }
+
+  /* natural-language date -> ISO ("" if unparseable) */
+  var NL_MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+  var NL_WDAYS = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+  function parseNL(s){
+    s = (s || "").trim().toLowerCase();
+    if (!s) return "";
+    var base = new Date(); base.setHours(0,0,0,0);
+    if (s === "today" || s === "tod") return todayISO();
+    if (s === "tomorrow" || s === "tom" || s === "tmrw"){ base.setDate(base.getDate()+1); return todayISO(base); }
+    if (s === "next week" || s === "nw"){ base.setDate(base.getDate()+7); return todayISO(base); }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    var wi = -1;
+    NL_WDAYS.forEach(function(w, i){ if (s.length >= 3 && w.indexOf(s) === 0) wi = i; });
+    if (wi >= 0){
+      var diff = (wi - base.getDay() + 7) % 7 || 7;
+      base.setDate(base.getDate() + diff);
+      return todayISO(base);
+    }
+    var m = s.match(/^(\d{1,2})\s+([a-z]{3,})$/) || (function(){
+      var r = s.match(/^([a-z]{3,})\s+(\d{1,2})$/);
+      return r ? [r[0], r[2], r[1]] : null;
+    })();
+    if (m){
+      var mi = -1;
+      NL_MONTHS.forEach(function(mo, i){ if (m[2].indexOf(mo) === 0) mi = i; });
+      if (mi >= 0){
+        var d = new Date(base.getFullYear(), mi, parseInt(m[1],10));
+        if (d < base) d.setFullYear(d.getFullYear()+1);
+        return todayISO(d);
+      }
+    }
+    return "";
+  }
+  function fmtDay(iso){
+    if (!iso) return "";
+    var t = todayISO();
+    if (iso === t) return "Today";
+    var d = new Date(iso + "T00:00:00");
+    var diff = Math.round((d - new Date(t + "T00:00:00")) / 86400000);
+    if (diff === 1) return "Tomorrow";
+    if (diff > 1 && diff < 7) return d.toLocaleDateString("en-GB", { weekday:"short" });
+    return d.toLocaleDateString("en-GB", { day:"numeric", month:"short" });
+  }
+  /* scheduled tasks whose date has arrived move into Today */
+  function promoteScheduled(){
+    var t = todayISO(), changed = false;
+    function run(list){
+      list.forEach(function(x){
+        if (!x.done && x.when && x.when <= t){ x.today = true; x.when = ""; changed = true; }
+      });
+    }
+    run(state.inbox);
+    state.missions.forEach(function(m){ run(m.tasks); });
+    if (changed) save();
+  }
 
   /* ================= icons ================= */
   function icon(name, size){
@@ -596,8 +713,36 @@
   }
 
   /* ================= rows ================= */
+  var expandedId = null;
+  var selId = null;
+
+  function taskCard(t){
+    var ckHtml = "";
+    (t.checklist || []).forEach(function(c){
+      ckHtml += '<div class="ck'+(c.done?" done":"")+'">' +
+        '<input type="checkbox" class="ckb" data-tid="'+t.id+'" data-ck="'+c.id+'"'+(c.done?" checked":"")+'>' +
+        '<span>'+esc(c.text)+'</span>' +
+        '<button class="rm" data-act="rmck" data-id="'+t.id+'" data-ck="'+c.id+'" title="Remove">'+icon("x")+'</button></div>';
+    });
+    return '<div class="task open'+(t.done?" done":"")+'" data-tid="'+t.id+'">' +
+      '<div class="headrow">' +
+        '<input type="checkbox" class="cb" data-id="'+t.id+'"'+(t.done?" checked":"")+'>' +
+        '<input class="ed-title" data-id="'+t.id+'" value="'+escA(t.text)+'" autocomplete="off">' +
+        '<button class="t-act star'+(t.today?" on":"")+'" data-act="star" data-id="'+t.id+'" title="Today">'+icon("star",15)+'</button>' +
+        '<button class="t-act" data-act="delTask" data-id="'+t.id+'" title="Delete">'+icon("x")+'</button>' +
+      '</div>' +
+      '<textarea class="ed-notes" data-id="'+t.id+'" rows="2" placeholder="Notes">'+esc(t.note||"")+'</textarea>' +
+      ckHtml +
+      '<input class="ck-add" data-id="'+t.id+'" placeholder="+ Checklist item" autocomplete="off">' +
+      '<div class="ed-row">' +
+        '<label class="pill">When<input class="ed-when" data-id="'+t.id+'" value="'+escA(t.today ? "Today" : (t.when ? fmtDay(t.when) : ""))+'" placeholder="fri &middot; 11 aug" autocomplete="off"></label>' +
+        '<label class="pill">'+icon("flag",12)+'<input class="ed-deadline" data-id="'+t.id+'" value="'+escA(t.deadline ? fmtDay(t.deadline) : "")+'" placeholder="Deadline" autocomplete="off"></label>' +
+      '</div></div>';
+  }
+
   function taskRow(t, sub, opts){
     opts = opts || {};
+    if (t.id === expandedId && !opts.noExpand) return taskCard(t);
     var starOn = t.today ? " on" : "";
     var moveSel = "";
     if (opts.move){
@@ -607,11 +752,19 @@
           return '<option value="'+m.id+'">'+esc(m.name)+'</option>';
         }).join("") + '</select>';
     }
-    return '<div class="task'+(t.done ? " done":"")+'">' +
+    var chips = "";
+    if (t.when && !t.today) chips += '<span class="chip-when">'+fmtDay(t.when)+'</span>';
+    if (t.deadline) chips += '<span class="chip-dl">'+icon("flag",11)+fmtDay(t.deadline)+'</span>';
+    if (t.checklist && t.checklist.length){
+      var ckDone = t.checklist.filter(function(c){ return c.done; }).length;
+      chips += '<span class="chip-ck">'+ckDone+'/'+t.checklist.length+'</span>';
+    }
+    var subline = chips + (sub ? '<span>'+esc(sub)+'</span>' : "") + moveSel;
+    return '<div class="task'+(t.done ? " done":"")+(t.id===selId?" sel":"")+'" data-tid="'+t.id+'">' +
       '<input type="checkbox" class="cb" data-id="'+t.id+'"'+(t.done?" checked":"")+'>' +
-      '<div class="t-main"><div class="t-title">'+esc(t.text)+'</div>' +
+      '<div class="t-main" data-act="expand" data-id="'+t.id+'"><div class="t-title">'+esc(t.text)+'</div>' +
         (t.note ? '<div class="t-note">'+esc(t.note)+'</div>' : "") +
-        (sub || moveSel ? '<div class="t-sub">'+(sub?esc(sub):"")+moveSel+'</div>' : "") +
+        (subline ? '<div class="t-sub">'+subline+'</div>' : "") +
       '</div>' +
       (opts.noStar ? "" : '<button class="t-act star'+starOn+'" data-act="star" data-id="'+t.id+'" title="Today">'+icon("star",15)+'</button>') +
       '<button class="t-act" data-act="delTask" data-id="'+t.id+'" title="Delete">'+icon("x")+'</button>' +
@@ -686,22 +839,33 @@
 
   function renderUpcoming(){
     var html = viewHeader("cal","Upcoming");
-    var ds = state.deadlines.slice().filter(function(x){ return x.date || x.when; });
-    ds.sort(function(a,b){ return String(a.date||"9999").localeCompare(String(b.date||"9999")); });
-    if (!ds.length) html += '<div class="empty">No deadlines logged.</div>';
-    ds.forEach(function(x){
-      var num = "&middot;", wd = esc(x.when || "");
-      if (x.date){
-        var dt = new Date(x.date + "T00:00:00");
-        num = dt.getDate();
-        wd = dt.toLocaleDateString("en-GB",{ weekday:"long", month:"long" });
-        var dl = Math.ceil((dt - new Date())/86400000);
-        if (dl >= 0) wd += " &middot; in " + dl + " day" + (dl===1?"":"s");
-      }
-      html += '<div class="day"><div class="n">'+num+'</div><div class="rest">' +
-        '<div class="wd">'+wd+'</div>' +
-        '<div class="ev"><span class="tm green">DUE</span><span class="tx">'+esc(x.what)+'</span></div>' +
-        '</div></div>';
+    var groups = {};
+    function g(iso){ return groups[iso] || (groups[iso] = { tasks:[], due:[] }); }
+    function scan(list, sub){
+      list.forEach(function(t){
+        if (t.done) return;
+        if (t.when && t.when > todayISO()) g(t.when).tasks.push({ t:t, sub:sub });
+        if (t.deadline) g(t.deadline).due.push(t.text);
+      });
+    }
+    scan(state.inbox, "Inbox");
+    state.missions.forEach(function(m){ scan(m.tasks, m.name); });
+    state.deadlines.forEach(function(x){ if (x.date) g(x.date).due.push(x.what); });
+    var dates = Object.keys(groups).sort();
+    if (!dates.length) html += '<div class="empty">Nothing scheduled. Open any task and give it a When date.</div>';
+    dates.forEach(function(iso){
+      var dt = new Date(iso + "T00:00:00");
+      var wd = dt.toLocaleDateString("en-GB",{ weekday:"long" }) + " " + dt.toLocaleDateString("en-GB",{ month:"long" });
+      var dl = Math.round((dt - new Date(todayISO()+"T00:00:00"))/86400000);
+      if (dl === 0) wd += " &middot; today";
+      else if (dl > 0) wd += " &middot; in " + dl + " day" + (dl===1?"":"s");
+      html += '<div class="day"><div class="n">'+dt.getDate()+'</div><div class="rest">' +
+        '<div class="wd">'+wd+'</div>';
+      groups[iso].due.forEach(function(w){
+        html += '<div class="ev"><span class="tm red">DUE</span><span class="tx">'+esc(w)+'</span></div>';
+      });
+      groups[iso].tasks.forEach(function(x){ html += taskRow(x.t, x.sub); });
+      html += '</div></div>';
     });
     page.innerHTML = html;
   }
@@ -710,7 +874,7 @@
     var html = viewHeader("layers","Anytime");
     var any = false;
     activeMissions().forEach(function(m){
-      var open = openOf(m.tasks);
+      var open = openOf(m.tasks).filter(function(t){ return !t.when; });
       if (!open.length) return;
       any = true;
       html += '<div class="sec" data-act="nav-project-sec" data-id="'+m.id+'" style="cursor:pointer">' +
@@ -1006,7 +1170,7 @@
     renderAll();
   }
   function addTask(dest, text){
-    var t = { id: uid(), text: text, note:"", done:false, doneAt:"", today: route.view === "today" };
+    var t = { id: uid(), text: text, note:"", done:false, doneAt:"", today: route.view === "today", when:"", deadline:"", checklist:[] };
     if (dest === "inbox"){ state.inbox.push(t); }
     else {
       var m = findMission(dest);
@@ -1017,10 +1181,29 @@
 
   document.addEventListener("click", function(e){
     var el = e.target.closest("[data-act]");
+    var act = el ? el.getAttribute("data-act") : null;
+    if (expandedId && !e.target.closest(".task.open") && !e.target.closest(".sheet") && act !== "expand"){
+      expandedId = null;
+      if (!el){ renderMain(); return; }
+    }
     if (!el) return;
-    var act = el.getAttribute("data-act");
     var id = el.getAttribute("data-id");
-    if (act === "nav"){ searchQ = ""; go(el.getAttribute("data-view")); }
+    if (act === "expand"){
+      expandedId = (expandedId === id) ? null : id;
+      selId = id;
+      renderMain();
+      var ti = page.querySelector('.ed-title[data-id="'+id+'"]');
+      if (ti){ ti.focus(); ti.setSelectionRange(ti.value.length, ti.value.length); }
+    }
+    else if (act === "rmck"){
+      var fr = findTask(id);
+      if (fr){
+        var ckId = el.getAttribute("data-ck");
+        fr.task.checklist = (fr.task.checklist||[]).filter(function(c){ return c.id !== ckId; });
+        save(); renderMain();
+      }
+    }
+    else if (act === "nav"){ searchQ = ""; go(el.getAttribute("data-view")); }
     else if (act === "nav-project" || act === "nav-project-sec"){ searchQ = ""; go("project", id); }
     else if (act === "star"){
       var f = findTask(id);
@@ -1051,9 +1234,58 @@
     }
   });
 
+  var graceTimer = null;
   document.addEventListener("change", function(e){
     if (e.target.classList.contains("cb")){
-      toggleDone(e.target.getAttribute("data-id"), e.target.checked);
+      var cbId = e.target.getAttribute("data-id");
+      if (e.target.checked){
+        var cf = findTask(cbId);
+        if (cf){
+          cf.task.done = true;
+          cf.task.doneAt = todayISO();
+          cf.task.today = false;
+          save();
+        }
+        if (cbId === expandedId) expandedId = null;
+        var row = e.target.closest(".task");
+        if (row){ row.classList.add("done","finishing"); }
+        clearTimeout(graceTimer);
+        graceTimer = setTimeout(function(){ maybeCelebrate(); renderAll(); }, 950);
+      } else {
+        clearTimeout(graceTimer);
+        toggleDone(cbId, false);
+      }
+      return;
+    }
+    if (e.target.classList.contains("ckb")){
+      var cft = findTask(e.target.getAttribute("data-tid"));
+      if (cft){
+        var ckId2 = e.target.getAttribute("data-ck");
+        var item = (cft.task.checklist||[]).find(function(c){ return c.id === ckId2; });
+        if (item){ item.done = e.target.checked; save(); renderMain(); }
+      }
+      return;
+    }
+    if (e.target.classList.contains("ed-when")){
+      var fw = findTask(e.target.getAttribute("data-id"));
+      if (fw){
+        var iso = parseNL(e.target.value);
+        if (!e.target.value.trim()){ fw.task.when = ""; fw.task.today = false; save(); renderAll(); }
+        else if (iso === todayISO()){ fw.task.today = true; fw.task.when = ""; save(); renderAll(); }
+        else if (iso){ fw.task.when = iso; fw.task.today = false; save(); renderAll(); }
+        else { e.target.value = fw.task.today ? "Today" : (fw.task.when ? fmtDay(fw.task.when) : ""); }
+      }
+      return;
+    }
+    if (e.target.classList.contains("ed-deadline")){
+      var fd = findTask(e.target.getAttribute("data-id"));
+      if (fd){
+        var iso2 = parseNL(e.target.value);
+        if (!e.target.value.trim()){ fd.task.deadline = ""; save(); renderAll(); }
+        else if (iso2){ fd.task.deadline = iso2; save(); renderAll(); }
+        else { e.target.value = fd.task.deadline ? fmtDay(fd.task.deadline) : ""; }
+      }
+      return;
     }
     if (e.target.id === "dailyGoalInput"){
       var g = parseInt(e.target.value, 10);
@@ -1078,6 +1310,16 @@
   });
 
   document.addEventListener("input", function(e){
+    if (e.target.classList.contains("ed-title")){
+      var ft = findTask(e.target.getAttribute("data-id"));
+      if (ft){ ft.task.text = e.target.value; save(); }
+      return;
+    }
+    if (e.target.classList.contains("ed-notes")){
+      var fn = findTask(e.target.getAttribute("data-id"));
+      if (fn){ fn.task.note = e.target.value; save(); }
+      return;
+    }
     if (e.target.id === "focusInput"){
       state.focus.text = e.target.value;
       state.focus.date = todayISO();
@@ -1101,10 +1343,73 @@
       if (!v) return;
       addTask(e.target.getAttribute("data-dest"), v);
     }
+    if (e.key === "Enter" && e.target.classList && e.target.classList.contains("ck-add")){
+      var cv = e.target.value.trim();
+      if (!cv) return;
+      var fa = findTask(e.target.getAttribute("data-id"));
+      if (fa){
+        (fa.task.checklist = fa.task.checklist || []).push({ id: uid(), text: cv, done:false });
+        save(); renderMain();
+        var again = page.querySelector('.ck-add[data-id="'+fa.task.id+'"]');
+        if (again) again.focus();
+      }
+    }
+    if (e.key === "Enter" && e.target.classList &&
+        (e.target.classList.contains("ed-when") || e.target.classList.contains("ed-deadline") || e.target.classList.contains("ed-title"))){
+      e.target.blur();
+    }
     if (e.key === "Enter" && e.target.id === "quickFind"){
       app.classList.add("show-main");
     }
-    if (e.key === "Escape") closeSheet();
+    if (e.key === "Escape"){
+      closeSheet();
+      if (expandedId){ expandedId = null; renderMain(); }
+    }
+  });
+
+  /* ================= keyboard shortcuts ================= */
+  document.addEventListener("keydown", function(e){
+    var tag = (e.target.tagName || "").toLowerCase();
+    var typing = tag === "input" || tag === "textarea" || tag === "select";
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f"){
+      e.preventDefault();
+      var qf = document.getElementById("quickFind");
+      if (qf) qf.focus();
+      return;
+    }
+    if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "n"){ e.preventDefault(); openSheet(); }
+    else if (e.key === "/"){
+      e.preventDefault();
+      var qf2 = document.getElementById("quickFind");
+      if (qf2) qf2.focus();
+    }
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+      var rows = page.querySelectorAll(".task[data-tid]");
+      if (!rows.length) return;
+      e.preventDefault();
+      var ids = Array.prototype.map.call(rows, function(r){ return r.getAttribute("data-tid"); });
+      var i = ids.indexOf(selId);
+      if (i === -1) i = e.key === "ArrowDown" ? 0 : ids.length - 1;
+      else i = e.key === "ArrowDown" ? Math.min(i+1, ids.length-1) : Math.max(i-1, 0);
+      selId = ids[i];
+      renderMain();
+      var selEl = page.querySelector(".task.sel");
+      if (selEl) selEl.scrollIntoView({ block:"nearest" });
+    }
+    else if ((e.key === "Enter" || e.key === " ") && selId){
+      e.preventDefault();
+      expandedId = (expandedId === selId) ? null : selId;
+      renderMain();
+    }
+    else if (e.key === "t" && selId){
+      var fs = findTask(selId);
+      if (fs){
+        fs.task.today = !fs.task.today;
+        if (fs.task.today) fs.task.when = "";
+        save(); renderAll();
+      }
+    }
   });
 
   /* ================= quick entry sheet ================= */
@@ -1124,6 +1429,7 @@
     if (route.view === "project" && route.id) qeDest.value = route.id;
     qeToday.checked = route.view === "today";
     qeTitle.value = ""; qeNotes.value = "";
+    document.getElementById("qeWhen").value = "";
     sheet.hidden = false; scrim.hidden = false;
     qeTitle.focus();
   }
@@ -1134,7 +1440,10 @@
   document.getElementById("qeSave").addEventListener("click", function(){
     var v = qeTitle.value.trim();
     if (!v){ qeTitle.focus(); return; }
-    var t = { id: uid(), text:v, note:qeNotes.value.trim(), done:false, doneAt:"", today: qeToday.checked };
+    var t = { id: uid(), text:v, note:qeNotes.value.trim(), done:false, doneAt:"", today: qeToday.checked, when:"", deadline:"", checklist:[] };
+    var wIso = parseNL(document.getElementById("qeWhen").value);
+    if (wIso === todayISO()){ t.today = true; }
+    else if (wIso){ t.when = wIso; t.today = false; }
     if (qeDest.value === "inbox") state.inbox.push(t);
     else {
       var m = findMission(qeDest.value);
@@ -1182,6 +1491,7 @@
           store.set(KEY, state);
           rolloverFocus();
           applyStreakProtection();
+          promoteScheduled();
           renderAll();
         } else if (!remote || localAt > remoteAt){
           push();
@@ -1257,6 +1567,7 @@
   /* ================= boot ================= */
   rolloverFocus();
   applyStreakProtection();
+  promoteScheduled();
   if (window.matchMedia("(min-width: 861px)").matches){
     app.classList.add("show-main");
   }

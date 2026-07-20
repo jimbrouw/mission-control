@@ -1637,14 +1637,15 @@
   });
 
   /* ================= cloud sync ================= */
-  var SYNC = { key: store.get(PASSKEY) || "", pushTimer:null, status:"", cls:"" };
+  var SYNC = { key: store.get(PASSKEY) || "", pushTimer:null, status:"", cls:"", error:"" };
   var syncRow = document.getElementById("syncRow");
 
   function renderSync(){
     if (!SYNC.key){
       syncRow.innerHTML = '<span class="sync-dot"></span>' +
         '<input id="passInput" type="password" placeholder="Sync passphrase" autocomplete="off">' +
-        '<button class="mini" id="linkBtn">Link</button>';
+        '<button class="mini" id="linkBtn">Link</button>' +
+        (SYNC.error ? '<span style="color:var(--red); font-size:12px; flex-basis:100%;">'+esc(SYNC.error)+'</span>' : "");
     } else {
       syncRow.innerHTML = '<span class="sync-dot '+SYNC.cls+'"></span>' +
         '<span>'+esc(SYNC.status || "Linked")+'</span>' +
@@ -1683,7 +1684,7 @@
         setSync("Synced "+stamp(),"ok");
       })
       .catch(function(e){
-        setSync(e && e.denied ? "Wrong passphrase" : "Offline \u00b7 saved locally","warn");
+        if (e && e.denied) denySync(); else setSync("Offline \u00b7 saved locally","warn");
       });
   }
   function push(){
@@ -1699,22 +1700,31 @@
         setSync("Synced "+stamp(),"ok");
       })
       .catch(function(e){
-        setSync(e && e.denied ? "Wrong passphrase" : "Offline \u00b7 saved locally","warn");
+        if (e && e.denied) denySync(); else setSync("Offline \u00b7 saved locally","warn");
       });
+  }
+  function denySync(){
+    SYNC.key = "";
+    store.clear(PASSKEY);
+    SYNC.error = "Wrong passphrase \u2014 try again";
+    renderSync();
   }
   function schedulePush(){
     if (!SYNC.key) return;
     clearTimeout(SYNC.pushTimer);
     SYNC.pushTimer = setTimeout(push, 1200);
   }
+  function tryLink(v){
+    if (!v) return;
+    SYNC.error = "";
+    SYNC.key = v;
+    store.set(PASSKEY, v);
+    pull();
+  }
   document.addEventListener("click", function(e){
     if (e.target.id === "linkBtn"){
       var pi = document.getElementById("passInput");
-      var v = pi && pi.value.trim();
-      if (!v) return;
-      SYNC.key = v;
-      store.set(PASSKEY, v);
-      pull();
+      tryLink(pi && pi.value.trim());
     }
     if (e.target.id === "unlinkBtn"){
       SYNC.key = "";
@@ -1724,11 +1734,7 @@
   });
   document.addEventListener("keydown", function(e){
     if (e.key === "Enter" && e.target.id === "passInput"){
-      var v = e.target.value.trim();
-      if (!v) return;
-      SYNC.key = v;
-      store.set(PASSKEY, v);
-      pull();
+      tryLink(e.target.value.trim());
     }
   });
   document.addEventListener("visibilitychange", function(){

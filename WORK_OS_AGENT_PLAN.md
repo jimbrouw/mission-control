@@ -59,7 +59,7 @@ Do not commit `WORKOS_SECRET`, a `.env` file containing it, or a Codex config co
 - [x] Deployed triage API works with `GEMINI_API_KEY`; the browser review interface is deployed.
 - [x] `$workos` proposes tasks before writing anything.
 - [x] Only explicit approval can create tasks; no other mutation route exists.
-- [ ] Created tasks appear after a mobile reload — the live task is saved; refresh Work OS on a mobile device and confirm the Inbox item `TEST — verify Work OS mobile sync` appears.
+- [x] Created tasks appear after a mobile reload — owner confirmed the live mobile sync on 22 July 2026.
 - [x] No secrets are committed.
 
 ## Not in V1

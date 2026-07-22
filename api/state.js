@@ -1,5 +1,5 @@
 /*
-  Mission Control sync endpoint.
+  Work OS sync endpoint.
   GET  /api/state  -> { state: {...} | null }
   PUT  /api/state  -> { ok: true }
   Auth: Authorization: Bearer <MC_SECRET>

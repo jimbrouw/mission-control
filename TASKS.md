@@ -1,4 +1,4 @@
-# MISSION CONTROL — BUILD PLAN (TASKS.md)
+# WORK OS — BUILD PLAN (TASKS.md)
 
 Rule of the plan: nothing in Phase 3+ gets built before 11 Aug unless Phase 2 is done.
 Each task is sized S (< 1 hr), M (half day), L (day+). One task = one Claude Code session where possible.
@@ -36,6 +36,8 @@ Each task is sized S (< 1 hr), M (half day), L (day+). One task = one Claude Cod
       Accept: after due date, prompt fires once, choices apply.
 
 ## PHASE 3 — CAPTURE (post-submission)
+- [ ] AI braindump triage — production proof — S
+      Implemented in `api/triage.js` and the Braindump review sheet. Add GEMINI_API_KEY in Vercel and prove paste → review → sync → mobile reload with real data.
 - [ ] Braindump splitter — S
       Paste multi-line text into Inbox → one task per line, empty lines ignored.
       Built for Whisper Flow output. Accept: paste 8 lines → 8 tasks.
@@ -44,7 +46,7 @@ Each task is sized S (< 1 hr), M (half day), L (day+). One task = one Claude Cod
       [Unverified] Browser support varies; Safari/Chrome differ — needs a real-device test, fallback is paste.
 - [ ] /api/capture endpoint — M
       POST { text } with the same Bearer passphrase → task lands in Inbox.
-      Then: iOS Shortcut ("Add to Mission Control") + one-line curl for Claude Code sessions.
+      Then: iOS Shortcut ("Add to Work OS") + one-line curl for Claude Code sessions.
       Accept: curl from laptop → task appears on phone within 90 s.
 
 ## PHASE 4 — PLATFORM (after capture, because push depends on PWA)
@@ -56,12 +58,14 @@ Each task is sized S (< 1 hr), M (half day), L (day+). One task = one Claude Cod
       Needs web push (VAPID) + a scheduled trigger (Vercel cron).
       [Unverified] iOS web push requires the Home Screen install and iOS 16.4+; behaviour varies by version.
 
-## PHASE 5 — CLAUDE IN THE COCKPIT (the fun ones — deliberately last)
+## PHASE 5 — WORK OS AGENT NATIVE (after braindump production proof)
+- [ ] Local Work OS MCP + `$workos` skill — M
+      Codex reads open tasks, proposes braindump triage, then writes only the explicitly approved new tasks. Accept: approved tasks appear after a mobile reload.
 - [ ] /api/brief morning brief — M
       Sends state to the Claude API, returns 3 lines: suggested One Thing, most at-risk project, one thing to drop.
       Renders at the top of Today before 10:00. Treat as a nudge, not an oracle.
-- [ ] Inbox triage by Claude — M
-      One tap: Claude proposes a destination project per inbox task; you confirm per item.
+- [ ] Inbox triage by AI — M
+      One tap: AI proposes a destination project per inbox task; you confirm per item. Reuse the review-first Work OS agent workflow.
 - [ ] Weekly review ritual — M
       Sunday view: ledger recap + keep / park / kill per project. Ten minutes, forced honesty.
 - [ ] Ledger → invoice trail — L

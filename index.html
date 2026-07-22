@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)" />
 <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)" />
-<title>Mission Control</title>
+<title>Work OS</title>
 <style>
   :root{
     --bg-side:#f5f5f7; --bg:#ffffff; --card:#f2f2f4;
@@ -421,6 +421,39 @@
 
   /* ---------------- mobile ---------------- */
   @media (max-width:860px){
+    /* Mobile is used at arm's length: keep every text tier 25% larger. */
+    body{ font-size:20px; }
+    .nav-item .ct{ font-size:17.5px; }
+    .area-h{ font-size:16.25px; }
+    .side-foot, .sync-row input, .mini, .plain{ font-size:15px; }
+    .backbtn{ font-size:21.25px; }
+    .vh h1{ font-size:37.5px; }
+    .chip{ font-size:13.75px; }
+    .vnote, .events{ font-size:18.75px; }
+    .one input{ font-size:21.25px; }
+    .shipbtn{ font-size:16.25px; }
+    .streaktag{ font-size:15px; }
+    .sec{ font-size:20px; }
+    .sec .ct{ font-size:16.25px; }
+    .t-title, .ed-title, .addrow input{ font-size:20px; }
+    .t-sub, .t-note, .move, .pill, .pill input{ font-size:16.25px; }
+    .ed-notes, .ck, .ck-add{ font-size:17.5px; }
+    .empty, .day .wd, .lg{ font-size:18.75px; }
+    .day .n{ font-size:42.5px; }
+    .proj .meta{ font-size:16.25px; }
+    .lg .d{ font-size:15px; }
+    .sheet input[type=text]{ font-size:22.5px; }
+    .sheet textarea, .btn-ghost, .btn-save, .bd-textarea, .bd-row-top input[type=text]{ font-size:18.75px; }
+    .qeRow select, .qeToday, #qeWhen, .bd-hint, .bd-row select, .bd-row .newname,
+    .bd-note, .bd-count, .bd-err, .ring-legend, .s-sub, .s-sub input{ font-size:16.25px; }
+    .bd-title{ font-size:22.5px; }
+    .bd-dup{ font-size:15px; }
+    .bd-status, .cele-sub{ font-size:17.5px; }
+    .streaktag.flame{ font-size:17.5px; }
+    .s-big{ font-size:23.75px; }
+    .cele-title{ font-size:26.25px; }
+    #page h1[style]{ font-size:32.5px !important; }
+    #syncRow span[style]{ font-size:15px !important; }
     .side{ width:100%; border-right:none; position:absolute; inset:0; z-index:1;
       transition:transform .28s cubic-bezier(.22,1,.36,1); }
     .main{ position:absolute; inset:0; z-index:2; transform:translateX(100%);
@@ -2005,7 +2038,7 @@
 
   /* ================= reset ================= */
   document.getElementById("resetBtn").addEventListener("click", function(){
-    if (confirm("Reset Mission Control to the seeded state? This resets all synced devices too.")){
+    if (confirm("Reset Work OS to the seeded state? This resets all synced devices too.")){
       store.clear(KEY);
       state = seed();
       state.meta.updatedAt = Date.now();

@@ -1,5 +1,5 @@
 /*
-  Mission Control braindump triage endpoint.
+  Work OS braindump triage endpoint.
   POST /api/triage -> { items: [...] }  or  { error: "..." }
   Auth: Authorization: Bearer <MC_SECRET>   (same passphrase as api/state.js)
 
@@ -26,7 +26,8 @@
 
   Requires:
     MC_SECRET       -> same passphrase as api/state.js
-    GEMINI_API_KEY  -> Gemini API key from ai.google.dev
+    GEMINI_API_KEY     -> Gemini API key from ai.google.dev (preferred)
+    GEMINI_API_SECRET  -> supported legacy/alternate name
 */
 
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
@@ -135,7 +136,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_SECRET || process.env.GEMINI_API_secret;
   if (!apiKey) {
     res.status(500).json({ error: "gemini_api_key_not_set" });
     return;

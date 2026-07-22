@@ -1,0 +1,4 @@
+interface:
+  display_name: "Work OS"
+  short_description: "Safely triage and hand off Work OS tasks"
+  default_prompt: "Use $workos to triage this task dump and show me a reviewable proposal."

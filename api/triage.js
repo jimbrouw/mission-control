@@ -11,8 +11,8 @@
   task proposals as strict JSON. This endpoint never writes to
   Redis/state — it only proposes; the client decides what to merge in.
 
-  Model: gemini-2.5-flash-lite (Google's cheapest current Flash-Lite
-  tier per ai.google.dev/gemini-api/docs/pricing — check that page
+  Model: gemini-3.5-flash-lite (Google's current lowest-cost Flash-Lite
+  tier per ai.google.dev/gemini-api/docs/latest-model — check that page
   again if this endpoint starts 404ing, Google renames these).
 
   Note on "duplicateOf": this endpoint deliberately does not receive
@@ -30,7 +30,7 @@
     GEMINI_API_SECRET  -> supported legacy/alternate name
 */
 
-const GEMINI_MODEL = "gemini-2.5-flash-lite";
+const GEMINI_MODEL = "gemini-3.5-flash-lite";
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/" +
   GEMINI_MODEL + ":generateContent";
@@ -136,8 +136,12 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_SECRET || process.env.GEMINI_API_secret;
-  if (!apiKey) {
+  const apiKeys = [...new Set([
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_SECRET,
+    process.env.GEMINI_API_secret,
+  ].filter(Boolean))];
+  if (!apiKeys.length) {
     res.status(500).json({ error: "gemini_api_key_not_set" });
     return;
   }
@@ -170,30 +174,32 @@ export default async function handler(req, res) {
   const prompt = buildPrompt(candidates, missions);
 
   try {
-    const r = await fetch(GEMINI_URL + "?key=" + encodeURIComponent(apiKey), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.2,
-        },
-      }),
-    });
+    let r = null;
+    let authFailed = false;
+    for (const apiKey of apiKeys) {
+      r = await fetch(GEMINI_URL + "?key=" + encodeURIComponent(apiKey), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json" },
+        }),
+      });
 
-    if (r.status === 401 || r.status === 403) {
-      res.status(502).json({ error: "gemini_auth_failed" });
-      return;
-    }
-    if (r.status === 429) {
-      res.status(502).json({ error: "gemini_rate_limited" });
-      return;
-    }
-    if (!r.ok) {
+      if (r.ok) break;
       const errText = await r.text().catch(() => "");
-      res.status(502).json({ error: "gemini_request_failed", detail: errText.slice(0, 300) });
-      return;
+      authFailed = r.status === 401 || r.status === 403 || /API_KEY_INVALID|API key not valid/i.test(errText);
+      if (!authFailed || apiKey === apiKeys[apiKeys.length - 1]) {
+        if (r.status === 429) {
+          res.status(502).json({ error: "gemini_rate_limited" });
+          return;
+        }
+        res.status(502).json({
+          error: authFailed ? "gemini_auth_failed" : "gemini_request_failed",
+          detail: authFailed ? undefined : errText.slice(0, 300),
+        });
+        return;
+      }
     }
 
     const j = await r.json();

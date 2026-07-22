@@ -46,7 +46,7 @@ Do not commit `WORKOS_SECRET`, a `.env` file containing it, or a Codex config co
 
 - [x] Local MCP server starts and reads only open tasks/missions.
 - [x] A live workspace read returned 11 open tasks; live triage returned a proposal without changing that count.
-- [ ] Optional write acceptance: explicitly approve one or two proposed items with the returned `workspaceUpdatedAt`, then confirm they appear after reload. This requires the owner's approval and has not been run.
+- [x] Owner-approved write proof: created exactly one Inbox item, `TEST — verify Work OS mobile sync`, with the live state version. A fresh read found it once and increased the open-task count from 11 to 12.
 
 ### Block 3 — safety proof
 
@@ -59,7 +59,7 @@ Do not commit `WORKOS_SECRET`, a `.env` file containing it, or a Codex config co
 - [x] Deployed triage API works with `GEMINI_API_KEY`; the browser review interface is deployed.
 - [x] `$workos` proposes tasks before writing anything.
 - [x] Only explicit approval can create tasks; no other mutation route exists.
-- [ ] Created tasks appear after a mobile reload — pending an owner-approved real task creation.
+- [ ] Created tasks appear after a mobile reload — the live task is saved; refresh Work OS on a mobile device and confirm the Inbox item `TEST — verify Work OS mobile sync` appears.
 - [x] No secrets are committed.
 
 ## Not in V1

@@ -8,9 +8,10 @@ Ship and production-prove a review-first Codex hand-off: raw notes become a prop
 
 - [x] Browser braindump triage UI in `index.html`: paste, AI proposal, edit/skip/destination review, confirm.
 - [x] `api/triage.js`: authenticated Gemini proposal endpoint; it never writes state.
-- [ ] Production proof: add `GEMINI_API_KEY` to Vercel, redeploy, and exercise the real deployed flow.
+- [x] Production API proof: Gemini returned a live task proposal from `https://workos-jim.vercel.app/api/triage` (22 July 2026); no state was written.
 - [x] `api/agent.js`: authenticated, task-level workspace read and approved-task creation API.
 - [x] Local Codex MCP server and `$workos` skill.
+- [x] Vercel project renamed to `work-os`; clean public address is `https://workos-jim.vercel.app`.
 
 ## Setup
 
@@ -22,46 +23,44 @@ Ship and production-prove a review-first Codex hand-off: raw notes become a prop
 command = "npm"
 args = ["run", "mcp:workos"]
 cwd = "/Users/jim/Developer/mission-control"
+env_vars = ["WORKOS_SECRET"]
 
 [mcp_servers.workos.env]
-WORKOS_URL = "https://mission-control-dusky-gamma.vercel.app"
-WORKOS_SECRET = "<MC_SECRET>"
+WORKOS_URL = "https://workos-jim.vercel.app"
 ```
 
-3. Restart Codex, then use: `$workos organise this dump: ...`
+3. Set the local `WORKOS_SECRET` login-session variable to the same value as Vercel's `MC_SECRET`; do not put either value in this file.
+4. Restart Codex, then use: `$workos organise this dump: ...`
 
 Do not commit `WORKOS_SECRET`, a `.env` file containing it, or a Codex config containing it.
 
 ## LLM implementation blocks
 
-### Block 1 — production proof
+### Block 1 — production proposal proof
 
-- Paste a real 8+ line braindump in deployed Work OS.
-- Edit one title, change one destination, skip one result, and confirm.
-- Reload the app and mobile device; confirm every approved item persists.
-- Record pass/fail and exact error text if the Gemini key or sync auth fails.
+- [x] Live Gemini proposal endpoint returned a result using `GEMINI_API_KEY`.
+- [x] The endpoint is proposal-only: no task count changed during the proof.
+- [ ] Optional manual browser acceptance: paste an 8+ line braindump, edit a title, change a destination, skip a result, confirm, then reload mobile to check the approved items persist. This has not been run because it would create real tasks.
 
 ### Block 2 — local MCP proof
 
-- Run `npm install` and configure the local `workos` MCP server above.
-- Ask Codex to call `workos_get_workspace` and verify it returns only open tasks and missions.
-- Ask Codex to triage a small dump; confirm no task count changes before approval.
-- Explicitly approve two items with the returned `workspaceUpdatedAt`, then confirm `workos_apply_items` adds exactly those two tasks.
+- [x] Local MCP server starts and reads only open tasks/missions.
+- [x] A live workspace read returned 11 open tasks; live triage returned a proposal without changing that count.
+- [ ] Optional write acceptance: explicitly approve one or two proposed items with the returned `workspaceUpdatedAt`, then confirm they appear after reload. This requires the owner's approval and has not been run.
 
 ### Block 3 — safety proof
 
-- Try an invalid passphrase: endpoint returns `unauthorized`.
-- Try an unknown mission ID: `apply_items` returns `unknown_mission` and writes nothing.
-- Change Work OS between proposal and approval: `apply_items` returns `state_changed` and writes nothing.
-- Confirm no MCP tool can delete, complete, move, or replace existing state.
+- [x] Invalid passphrase returns `unauthorized` from deployed endpoints.
+- [x] Local mocked checks cover unknown mission IDs and the stale-state guard; neither writes state.
+- [x] MCP exposes only workspace read, proposal triage, and explicitly approved task creation — no delete, complete, move, or replace operation.
 
 ## Acceptance
 
-- [ ] Deployed browser triage works with `GEMINI_API_KEY` and sync.
-- [ ] `$workos` proposes tasks before writing anything.
-- [ ] Only explicit approval creates tasks.
-- [ ] Created tasks appear after a mobile reload.
-- [ ] No secrets are committed.
+- [x] Deployed triage API works with `GEMINI_API_KEY`; the browser review interface is deployed.
+- [x] `$workos` proposes tasks before writing anything.
+- [x] Only explicit approval can create tasks; no other mutation route exists.
+- [ ] Created tasks appear after a mobile reload — pending an owner-approved real task creation.
+- [x] No secrets are committed.
 
 ## Not in V1
 

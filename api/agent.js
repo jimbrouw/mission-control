@@ -1,12 +1,17 @@
 /*
-  Work OS task-level agent API.
+  Work OS agent API.
 
   GET  /api/agent                   -> a safe workspace summary
-  POST /api/agent { action, items } -> apply approved new task items
+  POST /api/agent { action, ... }   -> apply approved new tasks or create one mission
 
   Auth: Authorization: Bearer <MC_SECRET>
   This endpoint deliberately has no generic state-replacement operation.
 */
+
+import {
+  createMissionInState,
+  missionSummary,
+} from "../shared/missions.js";
 
 const REDIS_KEY = "vibe:mc:state";
 const MAX_ITEMS = 60;
@@ -16,10 +21,15 @@ function taskId() {
   return "agent_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 }
 
+function missionId() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID();
+  return "agent_mission_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
 function taskSummary(task) {
   return {
     id: String(task.id || ""), text: String(task.text || ""), note: String(task.note || ""),
-    today: Boolean(task.today), when: String(task.when || ""), deadline: String(task.deadline || ""),
+    today: Boolean(task.today), when: String(task.when || ""), whenAt: String(task.whenAt || ""), deadline: String(task.deadline || ""),
   };
 }
 
@@ -72,6 +82,25 @@ function parseItems(body, state) {
   return { items };
 }
 
+function parseCreateMission(body, state) {
+  if (!body || body.action !== "create_mission") return { error: "bad_body" };
+  if (body.approved !== true) {
+    return { error: "approval_required", message: "Explicit approval of this exact mission is required." };
+  }
+  if (!Number.isInteger(body.expectedUpdatedAt) || body.expectedUpdatedAt < 0) {
+    return { error: "missing_state_version", message: "expectedUpdatedAt must be a non-negative integer from a workspace read." };
+  }
+  return { input: body };
+}
+
+function errorStatus(code) {
+  if (code === "state_changed") return 409;
+  if (code === "duplicate_mission") return 409;
+  if (code === "persistence_verification_failed") return 500;
+  if (code === "approval_required") return 403;
+  return 400;
+}
+
 export default async function handler(req, res) {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -91,8 +120,51 @@ export default async function handler(req, res) {
     if (typeof body === "string") {
       try { body = JSON.parse(body); } catch (error) { body = null; }
     }
-    const parsed = parseItems(body, state);
-    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const parsed = body && body.action === "create_mission"
+      ? parseCreateMission(body, state)
+      : parseItems(body, state);
+    if (parsed.error) {
+      return res.status(errorStatus(parsed.error)).json({ error: parsed.error, ...(parsed.message ? { message: parsed.message } : {}) });
+    }
+
+    if (body.action === "create_mission") {
+      const created = createMissionInState(state, parsed.input, {
+        expectedUpdatedAt: parsed.input.expectedUpdatedAt,
+        idFactory: missionId,
+      });
+      if (created.error) {
+        return res.status(errorStatus(created.error)).json({
+          error: created.error,
+          message: created.message,
+          ...(created.duplicate ? { duplicate: created.duplicate } : {}),
+          ...(created.workspaceUpdatedAt !== undefined ? { workspaceUpdatedAt: created.workspaceUpdatedAt } : {}),
+        });
+      }
+
+      await redisSet(url, token, state);
+      const persistedState = await redisGet(url, token);
+      const persistedMission = persistedState && Array.isArray(persistedState.missions)
+        ? persistedState.missions.find((mission) => mission.id === created.mission.id)
+        : null;
+      if (!persistedMission) {
+        return res.status(500).json({
+          error: "persistence_verification_failed",
+          message: "The mission write completed without a verified read-back. Re-read Work OS before retrying.",
+        });
+      }
+
+      const persisted = missionSummary(persistedMission);
+      if (persisted.name !== created.mission.name || persisted.note !== created.mission.note || persisted.status !== created.mission.status) {
+        return res.status(500).json({
+          error: "persistence_verification_failed",
+          message: "The mission read-back did not match the requested mission. Re-read Work OS before retrying.",
+        });
+      }
+      return res.status(200).json({
+        mission: persisted,
+        workspaceUpdatedAt: Number(persistedState.meta && persistedState.meta.updatedAt) || created.workspaceUpdatedAt,
+      });
+    }
 
     if (!Array.isArray(state.inbox)) state.inbox = [];
     if (!Array.isArray(state.missions)) state.missions = [];
@@ -104,7 +176,7 @@ export default async function handler(req, res) {
       state.orderSeq += 10;
       const task = {
         id: taskId(), text: item.text, note: item.note, done: false, doneAt: "",
-        today: false, when: "", deadline: "", checklist: [], order: state.orderSeq,
+        today: false, when: "", whenAt: "", deadline: "", checklist: [], order: state.orderSeq,
       };
       if (item.missionId) {
         const mission = state.missions.find((candidate) => candidate.id === item.missionId);

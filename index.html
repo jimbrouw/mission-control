@@ -61,9 +61,25 @@
   .nav-gap{ height:16px; }
 
   .area-h{
-    display:flex; align-items:center; gap:9px; padding:8px 10px 4px; color:var(--sub);
+    display:flex; align-items:center; gap:6px; padding:8px 6px 4px 10px; color:var(--sub);
     font-size:13px; font-weight:600; letter-spacing:.02em;
   }
+  .area-name{
+    flex:1; min-width:0; border:1px solid transparent; border-radius:6px; background:transparent;
+    color:inherit; font:inherit; letter-spacing:inherit; line-height:1.35; padding:3px 5px; outline:none;
+    text-transform:uppercase;
+  }
+  .area-name:hover{ border-color:var(--line); }
+  .area-name:focus{
+    border-color:var(--accent); background:var(--bg);
+    box-shadow:0 0 0 2px rgba(0,122,255,.12); color:var(--ink);
+  }
+  .area-add{
+    width:28px; height:28px; flex:none; display:grid; place-content:center; border:none; border-radius:7px;
+    background:transparent; color:var(--sub); cursor:pointer;
+  }
+  .area-add:hover{ background:var(--hover); color:var(--accent); }
+  .area-add:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
   .pie{
     width:15px; height:15px; border-radius:50%; flex:none;
     border:1.5px solid var(--accent);
@@ -244,6 +260,8 @@
     padding:4px 11px; font-size:13px; color:var(--sub);
   }
   .pill input{ border:none; outline:none; background:transparent; width:100px; font-size:13px; color:var(--ink); }
+  .pill input[type=datetime-local]{ width:174px; min-width:0; color-scheme:dark; }
+  @media (prefers-color-scheme: light){ .pill input[type=datetime-local]{ color-scheme:light; } }
   .pill input::placeholder{ color:var(--sub); opacity:.7; }
 
   .addrow{ display:flex; align-items:center; gap:12px; padding:12px 0; }
@@ -336,6 +354,32 @@
   }
   .btn-save:active{ transform:scale(.97); }
   .btn-save:disabled{ opacity:.5; cursor:default; }
+
+  /* mission creation sheet */
+  .new-mission-action{
+    border:1px solid var(--line); background:var(--bg); color:var(--accent);
+    border-radius:999px; padding:7px 12px; font-size:13px; font-weight:700; cursor:pointer;
+  }
+  .new-mission-action:hover{ background:var(--hover); }
+  .mission-sheet{ padding-top:20px; }
+  .mission-title{ font-size:19px; font-weight:800; margin-bottom:12px; }
+  .mission-field{ display:block; margin:12px 0; color:var(--sub); font-size:13px; font-weight:600; }
+  .mission-field input, .mission-field textarea, .mission-field select{
+    display:block; width:100%; margin-top:5px; border:1px solid var(--line); border-radius:9px;
+    background:var(--bg); padding:9px 10px; outline:none; font-size:16px; font-weight:400; resize:vertical;
+  }
+  .mission-field textarea{ min-height:72px; }
+  .mission-field input:focus, .mission-field textarea:focus, .mission-field select:focus{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,122,255,.14); }
+  .mission-feedback{ border-radius:9px; padding:9px 10px; margin:0 0 10px; font-size:14px; }
+  .mission-feedback.warn{ color:var(--red); background:rgba(255,59,48,.1); }
+  .mission-feedback.ok{ color:var(--green); background:rgba(52,199,89,.12); }
+  .mission-feedback[hidden]{ display:none; }
+  .mission-toast{
+    position:fixed; left:50%; bottom:calc(28px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+    z-index:80; background:var(--ink); color:var(--bg); border-radius:999px; padding:10px 16px;
+    font-size:14px; font-weight:600; box-shadow:0 8px 24px rgba(0,0,0,.2); white-space:nowrap;
+  }
+  .mission-toast[hidden]{ display:none; }
 
   /* braindump triage */
   .bd-sheet{ width:600px; max-width:92vw; max-height:80vh; overflow-y:auto; }
@@ -463,6 +507,13 @@
     .topbar{ display:flex; }
     .page{ padding:6px 18px 130px; }
   }
+  .planning{ margin:16px 0 24px; padding:18px; border:1px solid var(--line); border-radius:12px; }
+  .planning h2{ font-size:18px; margin:0 0 12px; }
+  .planning p{ overflow-wrap:anywhere; margin:10px 0; }
+  .planning .vnote{ margin:10px 0; }
+  .planning .mini{ min-height:36px; margin:4px 0; }
+  .planning label{ display:block; margin-top:12px; font-weight:600; }
+  .planning textarea{ display:block; box-sizing:border-box; width:100%; margin:6px 0 12px; padding:8px; font:inherit; color:inherit; background:transparent; border:1px solid #888; border-radius:6px; resize:vertical; }
 </style>
 </head>
 <body>
@@ -497,13 +548,33 @@
     <div class="qeRow">
       <select id="qeDest"></select>
       <label class="qeToday"><input type="checkbox" id="qeToday" /> Today</label>
-      <input type="text" id="qeWhen" placeholder="When &middot; fri &middot; 11 aug" autocomplete="off" style="border:1px solid var(--line); background:var(--bg); border-radius:8px; padding:6px 8px; font-size:14px; outline:none; width:150px;" />
+      <input type="datetime-local" id="qeWhen" aria-label="When" autocomplete="off" style="border:1px solid var(--line); background:var(--bg); border-radius:8px; padding:6px 8px; font-size:14px; outline:none; width:174px;" />
     </div>
     <div class="qeActions">
       <button class="btn-ghost" id="qeCancel">Cancel</button>
       <button class="btn-save" id="qeSave">Save</button>
     </div>
   </div>
+
+  <div class="scrim" id="missionScrim" hidden></div>
+  <div class="sheet mission-sheet" id="missionSheet" hidden role="dialog" aria-modal="true" aria-labelledby="missionDialogTitle">
+    <div class="mission-title" id="missionDialogTitle">New mission</div>
+    <div class="mission-feedback" id="missionFeedback" role="alert" aria-live="polite" hidden></div>
+    <label class="mission-field">Mission name
+      <input type="text" id="missionName" required maxlength="200" autocomplete="off" placeholder="e.g. ProducerOS V2" />
+    </label>
+    <label class="mission-field">Note <span style="font-weight:400">(optional)</span>
+      <textarea id="missionNote" maxlength="1000" rows="2" placeholder="What is this mission for?"></textarea>
+    </label>
+    <label class="mission-field">Initial status
+      <select id="missionStatus"></select>
+    </label>
+    <div class="qeActions">
+      <button class="btn-ghost" id="missionCancel">Cancel</button>
+      <button class="btn-save" id="missionSave">Create mission</button>
+    </div>
+  </div>
+  <div class="mission-toast" id="missionToast" role="status" aria-live="polite" hidden></div>
 
   <div class="cele" id="cele" hidden>
     <div class="cele-card">
@@ -520,7 +591,11 @@
 
 </div>
 
-<script>
+<script type="module">
+import { dailyPriority, handoverFields, resumeText } from "./shared/planning.js";
+import { createMissionInState, MISSION_STATUSES } from "./shared/missions.js";
+import { datePart, defaultWhenAt, timeLabel } from "./shared/date-time.js";
+
 (function(){
   "use strict";
 
@@ -541,7 +616,8 @@
       },
       set: function(k, v){
         mem[k] = v;
-        try { if (ls) ls.setItem(k, JSON.stringify(v)); } catch(e){}
+        try { if (ls){ ls.setItem(k, JSON.stringify(v)); return true; } } catch(e){}
+        return false;
       },
       clear: function(k){
         delete mem[k];
@@ -552,7 +628,7 @@
 
   var KEY = "vibe.mc.v1";
   var PASSKEY = "vibe.mc.pass";
-  var STATUSES = ["LIVE","BUILD","PITCH","PARKED"];
+  var STATUSES = MISSION_STATUSES;
 
   function uid(){ return Math.random().toString(36).slice(2,9); }
   function esc(s){
@@ -618,6 +694,7 @@
     function migrateTask(t){
       if (typeof t.today === "undefined") t.today = false;
       if (typeof t.when === "undefined") t.when = "";
+      if (typeof t.whenAt === "undefined") t.whenAt = t.when ? t.when + "T09:00" : "";
       if (typeof t.deadline === "undefined") t.deadline = "";
       if (!t.checklist) t.checklist = [];
     }
@@ -627,6 +704,9 @@
     });
     s.inbox.forEach(migrateTask);
     if (!s.settings) s.settings = { dailyGoal: 3 };
+    if (typeof s.settings.missionSectionName !== "string" || !s.settings.missionSectionName.trim()){
+      s.settings.missionSectionName = "Missions";
+    }
     if (typeof s.streak.best === "undefined") s.streak.best = s.streak.count || 0;
     if (typeof s.streak.freezes === "undefined") s.streak.freezes = 1;
     if (!s.cele) s.cele = { date:"", closed:[] };
@@ -647,8 +727,9 @@
 
   function save(){
     state.meta.updatedAt = Date.now();
-    store.set(KEY, state);
+    var persisted = store.set(KEY, state);
     schedulePush();
+    return persisted;
   }
 
   /* countdown to grant */
@@ -747,6 +828,18 @@
     if (diff > 1 && diff < 7) return d.toLocaleDateString("en-GB", { weekday:"short" });
     return d.toLocaleDateString("en-GB", { day:"numeric", month:"short" });
   }
+  function taskWhenValue(t){
+    if (t.whenAt) return t.whenAt;
+    if (t.when) return t.when + "T09:00";
+    if (t.today) return todayISO() + "T09:00";
+    return defaultWhenAt();
+  }
+  function fmtWhen(t){
+    var date = t.when || datePart(t.whenAt);
+    var label = t.today && !date ? "Today" : fmtDay(date);
+    var time = timeLabel(t.whenAt);
+    return label + (time ? " · " + time : "");
+  }
   /* scheduled tasks whose date has arrived move into Today */
   function promoteScheduled(){
     var t = todayISO(), changed = false;
@@ -818,7 +911,10 @@
       navRow("someday","box","Someday","") +
       navRow("logbook","log","Logbook","") +
       '<div class="nav-gap"></div>' +
-      '<div class="area-h">VIBE ANYTHING</div>';
+      '<div class="area-h">' +
+        '<input class="area-name" id="missionSectionName" value="'+escA(state.settings.missionSectionName)+'" aria-label="Mission section name" maxlength="40" autocomplete="off">' +
+        '<button class="area-add" type="button" data-act="openMission" aria-label="Create new mission" title="New mission">'+icon("plus")+'</button>' +
+      '</div>';
     activeMissions().forEach(function(m){
       var sel = (route.view === "project" && route.id === m.id) ? " sel" : "";
       html += '<div class="nav-item'+sel+'" data-act="nav-project" data-id="'+m.id+'">' +
@@ -834,6 +930,7 @@
 
   function taskCard(t){
     var ckHtml = "";
+    var whenValue = taskWhenValue(t);
     (t.checklist || []).forEach(function(c){
       ckHtml += '<div class="ck'+(c.done?" done":"")+'">' +
         '<input type="checkbox" class="ckb" data-tid="'+t.id+'" data-ck="'+c.id+'"'+(c.done?" checked":"")+'>' +
@@ -851,7 +948,7 @@
       ckHtml +
       '<input class="ck-add" data-id="'+t.id+'" placeholder="+ Checklist item" autocomplete="off">' +
       '<div class="ed-row">' +
-        '<label class="pill">When<input class="ed-when" data-id="'+t.id+'" value="'+escA(t.today ? "Today" : (t.when ? fmtDay(t.when) : ""))+'" placeholder="fri &middot; 11 aug" autocomplete="off"></label>' +
+        '<label class="pill">When<input type="datetime-local" class="ed-when" data-id="'+t.id+'" value="'+escA(whenValue)+'" aria-label="When" autocomplete="off"></label>' +
         '<label class="pill">'+icon("flag",12)+'<input class="ed-deadline" data-id="'+t.id+'" value="'+escA(t.deadline ? fmtDay(t.deadline) : "")+'" placeholder="Deadline" autocomplete="off"></label>' +
       '</div></div>';
   }
@@ -869,7 +966,7 @@
         }).join("") + '</select>';
     }
     var chips = "";
-    if (t.when && !t.today) chips += '<span class="chip-when">'+fmtDay(t.when)+'</span>';
+    if (t.when && !t.today) chips += '<span class="chip-when">'+esc(fmtWhen(t))+'</span>';
     if (t.deadline) chips += '<span class="chip-dl">'+icon("flag",11)+fmtDay(t.deadline)+'</span>';
     if (t.checklist && t.checklist.length){
       var ckDone = t.checklist.filter(function(c){ return c.done; }).length;
@@ -913,7 +1010,15 @@
     var n = effStreak();
     var r = ringsNow();
     var goal = (state.settings && state.settings.dailyGoal) || 3;
-    var html = viewHeader("star","Today");
+    var html = viewHeader("star","Today", '<button class="new-mission-action" data-act="openMission">+ New mission</button>');
+    var priority = dailyPriority(state, todayISO());
+    html += '<section class="planning" aria-label="Daily priority"><h2>Next 90-minute focus</h2>';
+    if (priority){
+      html += '<p>'+esc(priority.text)+'</p><p class="vnote">'+esc(priority.project)+' · '+esc(priority.reason)+'</p>' +
+        '<button class="mini" data-act="acceptPriority">Use as One Thing</button> ' +
+        (priority.missionId ? '<button class="mini" data-act="nav-project" data-id="'+escA(priority.missionId)+'">Open project handover</button>' : '');
+    } else html += '<p>No available open tasks. Add a next action in Inbox or a project.</p>';
+    html += '<p class="vnote">Suggestion from your tasks. Adjust One Thing below. Calendar and commercial value are not checked; no time is booked.</p></section>';
     html += '<div class="rings-wrap">' + ringSVG(r, 132) +
       '<div class="ring-legend">' +
         '<div class="rl"><span class="dot" style="background:#fa114f"></span>Ship &middot; <b>'+(r.ship>=100?"done":"not yet")+'</b></div>' +
@@ -926,7 +1031,7 @@
       '</div>';
     html += '<div class="one">' +
       '<span class="ic">'+icon("flag",18)+'</span>' +
-      '<input id="focusInput" placeholder="One thing — what ships today?" value="'+esc(state.focus.text||"")+'" autocomplete="off">' +
+      '<input id="focusInput" placeholder="One thing — what ships today?" value="'+escA(state.focus.text||"")+'" autocomplete="off">' +
       '<button class="shipbtn'+(shippedNow?" on":"")+'" data-act="ship">'+(shippedNow?"Shipped":"Ship it")+'</button>' +
       '<span class="streaktag flame'+(n>0?" lit":"")+'">'+icon("flame",16)+' '+n+'</span>' +
       '</div>';
@@ -1058,6 +1163,11 @@
       '<h1 style="font-size:26px">'+esc(m.name)+'</h1><span class="spacer"></span>' +
       '<button class="chip '+m.status+'" data-act="cycleStatus" data-id="'+m.id+'">'+m.status+'</button></div>';
     if (m.note) html += '<div class="vnote">'+esc(m.note)+'</div>';
+    html += '<section class="planning" aria-label="Project handover"><h2>Project handover</h2><p class="vnote">Self-reported. Record what you tried and what you actually checked. Typing saves on this device; cloud status is shown in Sync.</p>';
+    Object.entries(handoverFields).forEach(function(entry){
+      html += '<label for="handover-'+entry[0]+'">'+entry[1]+'</label><textarea id="handover-'+entry[0]+'" class="handover-field" data-field="'+entry[0]+'" data-mission="'+escA(m.id)+'" maxlength="2000" rows="2">'+esc((m.handover||{})[entry[0]]||'')+'</textarea>';
+    });
+    html += '<button class="mini" data-act="copyHandover" data-id="'+escA(m.id)+'">Copy resume handover</button><p id="handoverFeedback" role="status" aria-live="polite"></p></section>';
     var open = orderedOpen(m.tasks);
     if (open.length){
       open.forEach(function(t){ html += taskRow(t, ""); });
@@ -1287,7 +1397,7 @@
     renderAll();
   }
   function addTask(dest, text){
-    var t = { id: uid(), text: text, note:"", done:false, doneAt:"", today: route.view === "today", when:"", deadline:"", checklist:[], order: nextOrder() };
+    var t = { id: uid(), text: text, note:"", done:false, doneAt:"", today: route.view === "today", when:"", whenAt:"", deadline:"", checklist:[], order: nextOrder() };
     if (dest === "inbox"){ state.inbox.push(t); }
     else {
       var m = findMission(dest);
@@ -1305,7 +1415,26 @@
     }
     if (!el) return;
     var id = el.getAttribute("data-id");
-    if (act === "expand"){
+    if (act === "acceptPriority"){
+      var suggested = dailyPriority(state, todayISO());
+      if (suggested){
+        if (state.focus.text && state.focus.text !== suggested.text && !confirm('Replace your current One Thing?')) return;
+        state.focus.text = suggested.text; state.focus.date = todayISO();
+        save(); renderAll();
+      }
+    }
+    else if (act === "copyHandover"){
+      var mission = findMission(id);
+      if (mission){
+        Promise.resolve().then(function(){ return navigator.clipboard.writeText(resumeText(mission)); })
+          .then(function(){ var feedback = document.getElementById('handoverFeedback'); if (feedback) feedback.textContent = 'Copied. Paste into your next work session.'; })
+          .catch(function(){ var feedback = document.getElementById('handoverFeedback'); if (feedback) feedback.textContent = 'Clipboard unavailable. Select and copy the fields above.'; });
+      }
+    }
+    else if (act === "openMission"){
+      openMissionSheet();
+    }
+    else if (act === "expand"){
       expandedId = (expandedId === id) ? null : id;
       selId = id;
       renderMain();
@@ -1386,11 +1515,18 @@
     if (e.target.classList.contains("ed-when")){
       var fw = findTask(e.target.getAttribute("data-id"));
       if (fw){
-        var iso = parseNL(e.target.value);
-        if (!e.target.value.trim()){ fw.task.when = ""; fw.task.today = false; save(); renderAll(); }
-        else if (iso === todayISO()){ fw.task.today = true; fw.task.when = ""; save(); renderAll(); }
-        else if (iso){ fw.task.when = iso; fw.task.today = false; save(); renderAll(); }
-        else { e.target.value = fw.task.today ? "Today" : (fw.task.when ? fmtDay(fw.task.when) : ""); }
+        var whenValue = e.target.value;
+        var iso = datePart(whenValue);
+        if (!whenValue.trim()){
+          fw.task.when = ""; fw.task.whenAt = ""; fw.task.today = false; save(); renderAll();
+        }
+        else if (iso === todayISO()){
+          fw.task.today = true; fw.task.when = ""; fw.task.whenAt = whenValue; save(); renderAll();
+        }
+        else if (iso){
+          fw.task.when = iso; fw.task.whenAt = whenValue; fw.task.today = false; save(); renderAll();
+        }
+        else { e.target.value = taskWhenValue(fw.task); }
       }
       return;
     }
@@ -1427,6 +1563,23 @@
   });
 
   document.addEventListener("input", function(e){
+    if (e.target.classList.contains('handover-field')){
+      var mission = findMission(e.target.getAttribute('data-mission'));
+      var field = e.target.getAttribute('data-field');
+      if (mission && Object.hasOwn(handoverFields, field)){
+        if (!mission.handover) mission.handover = {};
+        mission.handover[field] = e.target.value.slice(0, 2000);
+        mission.handover.updatedAt = Date.now();
+        document.getElementById('handoverFeedback').textContent = save() ? 'Saved on this device.' : 'Not saved on this device. Copy your handover before leaving.';
+      }
+      return;
+    }
+
+    if (e.target.id === "missionSectionName"){
+      state.settings.missionSectionName = e.target.value;
+      save();
+      return;
+    }
     if (e.target.classList.contains("ed-title")){
       var ft = findTask(e.target.getAttribute("data-id"));
       if (ft){ ft.task.text = e.target.value; save(); }
@@ -1478,8 +1631,17 @@
     if (e.key === "Enter" && e.target.id === "quickFind"){
       app.classList.add("show-main");
     }
+    if (e.key === "Enter" && e.target.id === "missionSectionName"){
+      e.preventDefault();
+      e.target.blur();
+    }
+    if (e.key === "Enter" && (e.target.id === "missionName" || e.target.id === "missionStatus")){
+      e.preventDefault();
+      createMissionFromHomepage();
+    }
     if (e.key === "Escape"){
       closeSheet();
+      closeMissionSheet();
       if (expandedId){ expandedId = null; renderMain(); }
     }
   });
@@ -1694,6 +1856,88 @@
   var qeDest = document.getElementById("qeDest");
   var qeToday = document.getElementById("qeToday");
 
+  var missionSheet = document.getElementById("missionSheet");
+  var missionScrim = document.getElementById("missionScrim");
+  var missionName = document.getElementById("missionName");
+  var missionNote = document.getElementById("missionNote");
+  var missionStatus = document.getElementById("missionStatus");
+  var missionFeedback = document.getElementById("missionFeedback");
+  var missionSave = document.getElementById("missionSave");
+  var missionBusy = false;
+  var missionToast = document.getElementById("missionToast");
+  var missionToastTimer = null;
+
+  function setMissionFeedback(message, kind){
+    missionFeedback.textContent = message || "";
+    missionFeedback.className = "mission-feedback" + (kind ? " " + kind : "");
+    missionFeedback.hidden = !message;
+  }
+
+  function showMissionToast(message){
+    missionToast.textContent = message;
+    missionToast.hidden = false;
+    clearTimeout(missionToastTimer);
+    missionToastTimer = setTimeout(function(){ missionToast.hidden = true; }, 3200);
+  }
+
+  function openMissionSheet(){
+    closeSheet();
+    setMissionBusy(false);
+    missionName.value = "";
+    missionNote.value = "";
+    missionStatus.innerHTML = STATUSES.map(function(status){
+      return '<option value="'+status+'"'+(status === "BUILD" ? " selected" : "")+'>'+status+'</option>';
+    }).join("");
+    setMissionFeedback("", "");
+    missionSheet.hidden = false;
+    missionScrim.hidden = false;
+    missionName.focus();
+  }
+
+  function closeMissionSheet(){
+    if (missionBusy) return;
+    missionSheet.hidden = true;
+    missionScrim.hidden = true;
+  }
+
+  function setMissionBusy(busy){
+    missionBusy = busy;
+    missionSave.disabled = busy;
+    missionSave.textContent = busy ? "Creating…" : "Create mission";
+    document.getElementById("missionCancel").disabled = busy;
+  }
+
+  function createMissionFromHomepage(){
+    if (missionBusy || missionSheet.hidden) return;
+    var input = {
+      name: missionName.value,
+      note: missionNote.value,
+      status: missionStatus.value,
+    };
+    setMissionBusy(true);
+    var previousMissions = state.missions.slice();
+    var previousUpdatedAt = state.meta && state.meta.updatedAt;
+    var created = createMissionInState(state, input, { idFactory: uid });
+    if (created.error){
+      setMissionBusy(false);
+      setMissionFeedback(created.message || "Could not create that mission.", created.error === "duplicate_mission" ? "warn" : "warn");
+      missionName.focus();
+      return;
+    }
+    if (!save()){
+      state.missions = previousMissions;
+      state.meta.updatedAt = previousUpdatedAt;
+      setMissionBusy(false);
+      setMissionFeedback("Could not save this mission on the device. Your entries are still here — try again.", "warn");
+      missionName.focus();
+      return;
+    }
+    setMissionBusy(false);
+    closeMissionSheet();
+    renderAll();
+    showMissionToast("Created mission “" + created.mission.name + "”");
+  }
+
   function openSheet(){
     var opts = '<option value="inbox">Inbox</option>';
     state.missions.forEach(function(m){
@@ -1701,9 +1945,9 @@
     });
     qeDest.innerHTML = opts;
     if (route.view === "project" && route.id) qeDest.value = route.id;
-    qeToday.checked = route.view === "today";
+    qeToday.checked = false;
     qeTitle.value = ""; qeNotes.value = "";
-    document.getElementById("qeWhen").value = "";
+    document.getElementById("qeWhen").value = defaultWhenAt();
     sheet.hidden = false; scrim.hidden = false;
     qeTitle.focus();
   }
@@ -1711,13 +1955,18 @@
   document.getElementById("fab").addEventListener("click", openSheet);
   document.getElementById("qeCancel").addEventListener("click", closeSheet);
   scrim.addEventListener("click", closeSheet);
+  document.getElementById("missionCancel").addEventListener("click", closeMissionSheet);
+  missionScrim.addEventListener("click", closeMissionSheet);
+  missionSave.addEventListener("click", createMissionFromHomepage);
   document.getElementById("qeSave").addEventListener("click", function(){
     var v = qeTitle.value.trim();
     if (!v){ qeTitle.focus(); return; }
-    var t = { id: uid(), text:v, note:qeNotes.value.trim(), done:false, doneAt:"", today: qeToday.checked, when:"", deadline:"", checklist:[], order: nextOrder() };
-    var wIso = parseNL(document.getElementById("qeWhen").value);
-    if (wIso === todayISO()){ t.today = true; }
-    else if (wIso){ t.when = wIso; t.today = false; }
+    var t = { id: uid(), text:v, note:qeNotes.value.trim(), done:false, doneAt:"", today: qeToday.checked, when:"", whenAt:"", deadline:"", checklist:[], order: nextOrder() };
+    var wValue = document.getElementById("qeWhen").value;
+    var wIso = datePart(wValue);
+    if (qeToday.checked){ t.today = true; t.whenAt = wIso === todayISO() ? wValue : ""; }
+    else if (wIso === todayISO()){ t.today = true; t.whenAt = wValue; }
+    else if (wIso){ t.when = wIso; t.whenAt = wValue; t.today = false; }
     if (qeDest.value === "inbox") state.inbox.push(t);
     else {
       var m = findMission(qeDest.value);
@@ -1975,7 +2224,7 @@
       if (!text) return;
       var task = {
         id: uid(), text: text, note:(it.note||"").trim(), done:false, doneAt:"",
-        today:false, when:"", deadline:"", checklist:[], order: nextOrder()
+        today:false, when:"", whenAt:"", deadline:"", checklist:[], order: nextOrder()
       };
       if (it._dest === "inbox"){
         state.inbox.push(task);

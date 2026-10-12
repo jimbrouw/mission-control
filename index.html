@@ -463,6 +463,13 @@
     .topbar{ display:flex; }
     .page{ padding:6px 18px 130px; }
   }
+  .planning{ margin:16px 0 24px; padding:18px; border:1px solid var(--line); border-radius:12px; }
+  .planning h2{ font-size:18px; margin:0 0 12px; }
+  .planning p{ overflow-wrap:anywhere; margin:10px 0; }
+  .planning .vnote{ margin:10px 0; }
+  .planning .mini{ min-height:36px; margin:4px 0; }
+  .planning label{ display:block; margin-top:12px; font-weight:600; }
+  .planning textarea{ display:block; box-sizing:border-box; width:100%; margin:6px 0 12px; padding:8px; font:inherit; color:inherit; background:transparent; border:1px solid #888; border-radius:6px; resize:vertical; }
 </style>
 </head>
 <body>
@@ -520,7 +527,8 @@
 
 </div>
 
-<script>
+<script type="module">
+import { dailyPriority, handoverFields, resumeText } from "./shared/planning.js";
 (function(){
   "use strict";
 
@@ -541,7 +549,8 @@
       },
       set: function(k, v){
         mem[k] = v;
-        try { if (ls) ls.setItem(k, JSON.stringify(v)); } catch(e){}
+        try { if (ls){ ls.setItem(k, JSON.stringify(v)); return true; } } catch(e){}
+        return false;
       },
       clear: function(k){
         delete mem[k];
@@ -647,8 +656,9 @@
 
   function save(){
     state.meta.updatedAt = Date.now();
-    store.set(KEY, state);
+    var persisted = store.set(KEY, state);
     schedulePush();
+    return persisted;
   }
 
   /* countdown to grant */
@@ -914,6 +924,14 @@
     var r = ringsNow();
     var goal = (state.settings && state.settings.dailyGoal) || 3;
     var html = viewHeader("star","Today");
+    var priority = dailyPriority(state, todayISO());
+    html += '<section class="planning" aria-label="Daily priority"><h2>Next 90-minute focus</h2>';
+    if (priority){
+      html += '<p>'+esc(priority.text)+'</p><p class="vnote">'+esc(priority.project)+' · '+esc(priority.reason)+'</p>' +
+        '<button class="mini" data-act="acceptPriority">Use as One Thing</button> ' +
+        (priority.missionId ? '<button class="mini" data-act="nav-project" data-id="'+escA(priority.missionId)+'">Open project handover</button>' : '');
+    } else html += '<p>No available open tasks. Add a next action in Inbox or a project.</p>';
+    html += '<p class="vnote">Suggestion from your tasks. Adjust One Thing below. Calendar and commercial value are not checked; no time is booked.</p></section>';
     html += '<div class="rings-wrap">' + ringSVG(r, 132) +
       '<div class="ring-legend">' +
         '<div class="rl"><span class="dot" style="background:#fa114f"></span>Ship &middot; <b>'+(r.ship>=100?"done":"not yet")+'</b></div>' +
@@ -1058,6 +1076,11 @@
       '<h1 style="font-size:26px">'+esc(m.name)+'</h1><span class="spacer"></span>' +
       '<button class="chip '+m.status+'" data-act="cycleStatus" data-id="'+m.id+'">'+m.status+'</button></div>';
     if (m.note) html += '<div class="vnote">'+esc(m.note)+'</div>';
+    html += '<section class="planning" aria-label="Project handover"><h2>Project handover</h2><p class="vnote">Self-reported. Record what you tried and what you actually checked. Typing saves on this device; cloud status is shown in Sync.</p>';
+    Object.entries(handoverFields).forEach(function(entry){
+      html += '<label for="handover-'+entry[0]+'">'+entry[1]+'</label><textarea id="handover-'+entry[0]+'" class="handover-field" data-field="'+entry[0]+'" data-mission="'+escA(m.id)+'" maxlength="2000" rows="2">'+esc((m.handover||{})[entry[0]]||'')+'</textarea>';
+    });
+    html += '<button class="mini" data-act="copyHandover" data-id="'+escA(m.id)+'">Copy resume handover</button><p id="handoverFeedback" role="status" aria-live="polite"></p></section>';
     var open = orderedOpen(m.tasks);
     if (open.length){
       open.forEach(function(t){ html += taskRow(t, ""); });
@@ -1305,7 +1328,23 @@
     }
     if (!el) return;
     var id = el.getAttribute("data-id");
-    if (act === "expand"){
+    if (act === "acceptPriority"){
+      var suggested = dailyPriority(state, todayISO());
+      if (suggested){
+        if (state.focus.text && state.focus.text !== suggested.text && !confirm('Replace your current One Thing?')) return;
+        state.focus.text = suggested.text; state.focus.date = todayISO();
+        save(); renderAll();
+      }
+    }
+    else if (act === "copyHandover"){
+      var mission = findMission(id);
+      if (mission){
+        Promise.resolve().then(function(){ return navigator.clipboard.writeText(resumeText(mission)); })
+          .then(function(){ var feedback = document.getElementById('handoverFeedback'); if (feedback) feedback.textContent = 'Copied. Paste into your next work session.'; })
+          .catch(function(){ var feedback = document.getElementById('handoverFeedback'); if (feedback) feedback.textContent = 'Clipboard unavailable. Select and copy the fields above.'; });
+      }
+    }
+    else if (act === "expand"){
       expandedId = (expandedId === id) ? null : id;
       selId = id;
       renderMain();
@@ -1427,6 +1466,18 @@
   });
 
   document.addEventListener("input", function(e){
+    if (e.target.classList.contains('handover-field')){
+      var mission = findMission(e.target.getAttribute('data-mission'));
+      var field = e.target.getAttribute('data-field');
+      if (mission && Object.hasOwn(handoverFields, field)){
+        if (!mission.handover) mission.handover = {};
+        mission.handover[field] = e.target.value.slice(0, 2000);
+        mission.handover.updatedAt = Date.now();
+        document.getElementById('handoverFeedback').textContent = save() ? 'Saved on this device.' : 'Not saved on this device. Copy your handover before leaving.';
+      }
+      return;
+    }
+
     if (e.target.classList.contains("ed-title")){
       var ft = findTask(e.target.getAttribute("data-id"));
       if (ft){ ft.task.text = e.target.value; save(); }

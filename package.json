@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "mcp:workos": "node mcp/workos-server.js"
+    "mcp:workos": "node mcp/workos-server.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

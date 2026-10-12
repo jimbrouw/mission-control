@@ -7,7 +7,7 @@ export function dailyPriority(state, day) {
       if (task.done || !task.text?.trim()) continue;
       const deadline = /^\d{4}-\d{2}-\d{2}$/.test(task.deadline || '') ? task.deadline : '';
       const due = deadline && deadline <= day;
-      if (!due && (task.when || task.whenAt || '').slice(0, 10) > day) continue;
+      if (!due && !task.today && (task.when || task.whenAt || '').slice(0, 10) > day) continue;
       const rank = due ? 0 : task.today ? 1 : mission?.status === 'LIVE' ? 2 : 3;
       candidates.push({ taskId: task.id, missionId: mission?.id || null, text: task.text,
         project: mission?.name || 'Inbox', rank, deadline, order: task.order || 0,

@@ -49,6 +49,26 @@ server.registerTool("workos_triage_dump", {
   } catch (error) { return failure(error); }
 });
 
+server.registerTool("workos_create_mission", {
+  title: "Create an approved Work OS mission",
+  description: "Create exactly one mission after the user explicitly approves its exact name, note, and initial status. Read the workspace first; if state_changed is returned, read again and request renewed approval.",
+  inputSchema: {
+    name: z.string().min(1).max(200),
+    note: z.string().max(1000).optional(),
+    status: z.string().optional(),
+    expectedUpdatedAt: z.number().int().nonnegative(),
+    approved: z.literal(true),
+  },
+  annotations: { destructiveHint: true },
+}, async ({ name, note, status, expectedUpdatedAt, approved }) => {
+  try {
+    return result(await callWorkOs("/api/agent", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create_mission", name, note, status, expectedUpdatedAt, approved }),
+    }));
+  } catch (error) { return failure(error); }
+});
+
 server.registerTool("workos_apply_items", {
   title: "Apply approved Work OS tasks",
   description: "Create the supplied tasks in Work OS. Call only after the user explicitly approves this exact list; it cannot delete, complete, or overwrite tasks.",

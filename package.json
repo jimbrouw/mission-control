@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "mcp:workos": "node mcp/workos-server.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "check": "node --check shared/missions.js && node --check shared/date-time.js && node --check api/agent.js && node --check mcp/workos-server.js && node --check shared/planning.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

@@ -27,3 +27,7 @@ test('resume is explicitly self-reported and never infers verification from comp
   assert.match(text,/Verification evidence: Not recorded/);
   assert.match(text,/Next action: Test playback/);
 });
+
+test('explicit Today choice takes precedence over a previous future start', () => {
+  assert.equal(dailyPriority({inbox:[task('chosen',{today:true,whenAt:'2026-10-14T09:00'})]},day).text,'chosen');
+});
